@@ -145,7 +145,19 @@ object PolymorphicFunctions {
 
   // Exercise 2: Implement a polymorphic function to check whether
   // an `Array[A]` is sorted
-  def isSorted[A](as: Array[A], gt: (A,A) => Boolean): Boolean = ???
+  def isSorted[A](as: Array[A], gt: (A,A) => Boolean): Boolean = {
+
+    def go(n: Int, as: Array[A]): Boolean = {
+      if (n >= as.length - 1)
+        true
+      else if (!gt(as(n), as(n + 1)))
+        go(n + 1, as)
+      else
+        false
+    }
+
+    go(0, as)
+  }
 
   // Polymorphic functions are often so constrained by their type
   // that they only have one implementation! Here's an example:
@@ -153,20 +165,19 @@ object PolymorphicFunctions {
   // Exercise 3: Implement `partial1`.
 
   def partial1[A,B,C](a: A, f: (A,B) => C): B => C =
-    ???
+    (b: B) => f(a, b)
 
   // Exercise 4: Implement `curry`.
 
   // Note that `=>` associates to the right, so we could
   // write the return type as `A => B => C`
   def curry[A,B,C](f: (A, B) => C): A => (B => C) =
-    ???
+    (a: A) => ((b: B) => f(a, b))
 
   // NB: The `Function2` trait has a `curried` method already
-
   // Exercise 5: Implement `uncurry`
   def uncurry[A,B,C](f: A => B => C): (A, B) => C =
-    ???
+    (a: A, b: B) => f(a)(b)
 
   /*
   NB: There is a method on the `Function` object in the standard library,
@@ -181,5 +192,26 @@ object PolymorphicFunctions {
   // Exercise 6: Implement `compose`
 
   def compose[A,B,C](f: B => C, g: A => B): A => C =
-    ???
+    (a: A) => f(g(a))
+
+
+  def main(args: Array[String]) {
+    val sorted = Array(1, 3, 4, 9)
+
+    val unsorted = Array(4, 1, 5, 9)
+
+    def gt = (a: Int, b: Int) => a >= b
+
+    println("sorted is sorted? " + isSorted(sorted, gt) )
+    println("unsorted is sorted? " + isSorted(unsorted, gt) )
+
+    def f = (x: Double) => x * x
+    def g = (x: Double) => x + 1
+
+    def fg = compose(f, g)
+    def fgWithCompose = f compose g
+    def fgWithAndThen = g andThen(f)
+
+    println("(x + 1) ^ 2, x = 5, should be 36. Found: " + fg(5) + "; withCompose: " + fgWithCompose(5) + "; withAndThen: " + fgWithAndThen(5))
+  }
 }
