@@ -2,6 +2,15 @@ import sbt._
 import Keys._
 
 object FPInScalaBuild extends Build {
+
+  resolvers ++= Seq("snapshot" at "http://scala-tools.org/repo-snapshots",
+    "releases" at "http://scala-tools.org/repo-releases")
+
+
+  libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "2.2.1" % "test",
+                              "org.scalacheck" %% "scalacheck" % "1.11.5" % "test")
+
+
   val opts = Project.defaultSettings ++ Seq(
     scalaVersion := "2.10.3",
     resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
