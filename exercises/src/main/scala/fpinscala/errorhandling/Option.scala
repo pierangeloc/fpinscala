@@ -16,6 +16,7 @@ sealed trait Option[+A] {
     case None => default
   }
 
+  //Ex 4.1
   def flatMap[B](f: A => Option[B]): Option[B] = map(f).getOrElse(None)
 //  = this match {
 //    case Some(x) => f(x)
@@ -63,14 +64,30 @@ object Option {
     if (xs.isEmpty) None
     else Some(xs.sum / xs.length)
 
+  //Ex 4.2
   def variance(xs: Seq[Double]): Option[Double] = mean(xs) flatMap ((m: Double) => mean( xs map ((x: Double) => pow(x - m, 2))))
 
-  def map2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = sys.error("todo")
+  //Ex 4.3
+  def map2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = a flatMap( (aa: A) => b map (f(aa, _)))
 
-  def sequence[A](a: List[Option[A]]): Option[List[A]] = sys.error("todo")
+  //Ex 4.4
+  def sequence[A](a: List[Option[A]]): Option[List[A]] =
+//    a.foldRight[Option[List[A]]](Some(Nil))((optA: Option[A], optListA: Option[List[A]]) => optListA flatMap( list => (optA map (_ :: list))) )
+    a.foldRight[Option[List[A]]](Some(Nil))(( optA, optListA) => map2(optA, optListA)(_ :: _))
 
 
-  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = sys.error("todo")
+  //Ex 4.5
+  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] =
+    a.foldRight[Option[List[B]]](Some(Nil))(( elemA, optListB) => map2(f(elemA), optListB)(_ :: _))
+
+  def sequence2[A](a: List[Option[A]]): Option[List[A]] = traverse(a)((x: Option[A]) => x)
+
+
+  def Try[A](a: =>A): Option[A] = try {
+    Some(a)
+  } catch {
+    case e: Exception => None
+  }
 }
 
 object TestOption {
@@ -79,6 +96,17 @@ object TestOption {
     println("mean: " + Option.mean(values))
     println("squared errors:" + (values map ((x: Double) => Math.pow(x - 3, 2))) )
     println("Testing variance on Sequence: " + values + ": var = " + Option.variance(values))
+    println("Testing sequence / 1 : " + Option.sequence(List(Some(1), Some(2), Some(3))))
+    println("Testing sequence / 2 : " + Option.sequence(List(Some(1), Some(2), None)))
+
+    import Option.Try
+    //example of a list of string that fail to be parsed all together to a list of ints
+    def parseIntOpt: String => Option[Int] = (s: String) => Try(s.toInt)
+    println(List("something", "1", "2", "3").map(parseIntOpt(_)))
+    println(Option.traverse(List("something", "1", "2", "3"))(parseIntOpt))
+    println(Option.traverse(List("99", "1", "2", "3"))(parseIntOpt))
+
+
   }
 
 }
