@@ -72,8 +72,6 @@ trait Stream[+A] {
 
 
   //Infinite Streams/Corecursion
-  //Ex 5.8
-  def startsWith[B](s: Stream[B]): Boolean = sys.error("todo")
 
   def headOption: Option[A] = this match {
     case Cons(h, t) => Some(h())
@@ -101,16 +99,21 @@ trait Stream[+A] {
     case _ => None
   }
 
-  def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] = {
-    Stream.unfold((this, s2)) {
-      case (Cons(h0, t0), Cons(h1, t1)) => Some((Some(h0()), Some(h1())), (t0(), t1()))
-      case (Cons(h0, t0), Empty) => Some((Some(h0()), None), (t0(), empty[B]))
-      case (Empty, Cons(h1, t1)) => Some((None, Some(h1())), (empty[A], t1()))
+  def zipAll[B](s1: Stream[B]): Stream[(Option[A], Option[B])] = {
+    Stream.unfold((this, s1)) {
+      case (Cons(h0, t0), Cons(h1, t1)) => Some( (Some(h0()), Some(h1()) ), (t0(), t1()))
+      case (Cons(h0, t0), Empty) => Some( (Some(h0()): Option[A], None: Option[B]), (t0(), empty[B]))
+      case (Empty, Cons(h1, t1)) => Some( (None: Option[A], Some(h1()): Option[B]), (empty[A], t1()))
       case _ => None
     }
-
   }
 
+
+  //Ex 5.14
+  def startsWith[B](s: Stream[B]): Boolean = this.zipWith(s)((_,_)).forAll({case (x, y) => x == y})
+
+  //Ex 5.15
+  def tails: Stream[Stream[A]] = ???
 
 
 }
@@ -178,6 +181,12 @@ object TestStream {
     val s2 = Stream.from(0).take(10)
 
     println(s1.zipWith(s2)((a: Int, b: Int) => a * b).toList)
+
+    println(Stream.from(-10).take(20).zipAll(Stream.from(-100).take(10)).toList)
+    println(Stream.from(-10).take(20).zipWith(Stream.from(-100))((_, _)).take(10).toList)
+
+    println(Stream.from(0).take(20).startsWith(Stream.from(0).take(10)))
+
   }
 
 }
