@@ -110,7 +110,7 @@ object List { // `List` companion object. Contains functions for creating and wo
   //Ex 3.7
   // It is not possible to have shortcuts with foldRight, just because foldRight required going through the list till the end, and then starting evaluation
   //keep in mind that foldRight can be interpreted just replacing the Cons and Nil in the construction of the list, with f and z respectively, regardless
-  // of the nature of f. Therefore no way to use shortcircuits here here
+  // of the nature of f. Therefore no way to use short circuits here
 
   //Ex 3.8
   def foldRightWithCons[A] = (as: List[A]) => foldRight(as, Nil: List[A])(Cons(_,_))

@@ -159,7 +159,11 @@ case class State[S,+A](run: S => (A, S)) {
     f(v1).run(s1)
   })
 
+  //to set state to a particular value, remaining in the contract of an output being in shape of State[S, X]
+  def set[S](s: S): State[S, Unit] = State(_ => ((), s))
 
+  //to get the state, a transition from the state s to (s, s) will expose the internal state
+  def get[S](): State[S, S] = State(s => (s, s))
 
 }
 
@@ -170,8 +174,25 @@ case object Turn extends Input
 case class Machine(locked: Boolean, candies: Int, coins: Int)
 
 object State {
+
+  def mutate(machine: Machine, input: Input): Machine = {
+    (machine, input) match {
+      case (Machine(true, candies, coins), Coin) if candies > 0 => Machine(false, candies, coins + 1)
+      case (Machine(false, candies, coins), Turn) => Machine(true, candies - 1, coins)
+
+      case (machine1, _) => machine1
+
+    }
+  }
+
   type Rand[A] = State[RNG, A]
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = ???
+
+  // return state of machine and number of candies/coins
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = State( (machine: Machine) => {
+      val finalMachine = inputs.foldLeft(machine)((m, input) => mutate(m, input))
+      ((finalMachine.candies, finalMachine.coins), finalMachine)
+    }
+  )
 
   //Ex 6.10 (ii)
   def unit[S, A](a: A): State[S, A] = State((s: S) => (a, s))
