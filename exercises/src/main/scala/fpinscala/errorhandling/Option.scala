@@ -23,14 +23,12 @@ sealed trait Option[+A] {
 //    case None => None
 //  }
 
-  //todo: impl without patmat?
   def orElse[B>:A](ob: => Option[B]): Option[B] = map(Some(_)).getOrElse(ob)
 //  this match {
 //    case None => ob
 //    case _ => _
 //  }
 
-  //todo: impl without patmat?
   def filter(f: A => Boolean): Option[A] = flatMap((x:A) => if (f(x)) Some(x) else None)
 //    this match {
 //    case Some(x) if f(x) => Some(x)

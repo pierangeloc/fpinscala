@@ -54,6 +54,7 @@ trait Stream[+A] {
     case _ => false
   }
 
+  //Examples of how to use foldRight
   //Ex 5.4
   def forAll(p: A => Boolean): Boolean = this.foldRight(true)((a, b) => p(a) && b)
 
@@ -71,13 +72,14 @@ trait Stream[+A] {
   def flatMap[B](f: A => Stream[B]) = this.foldRight(Stream.empty: Stream[B])((h, t) => f(h).append(t))
 
 
-  //Infinite Streams/Corecursion
 
   def headOption: Option[A] = this match {
     case Cons(h, t) => Some(h())
     case Empty => None
   }
 
+
+  //Infinite Streams/Corecursion
   //Ex 5.13
   def mapWithUnfold[B](f: A => B) = Stream.unfold(this) {
     case Cons(h, t) => Some((f(h()), t()))
@@ -99,6 +101,7 @@ trait Stream[+A] {
     case _ => None
   }
 
+  //this continues to zip as long as at least one stream has elements
   def zipAll[B](s1: Stream[B]): Stream[(Option[A], Option[B])] = {
     Stream.unfold((this, s1)) {
       case (Cons(h0, t0), Cons(h1, t1)) => Some( (Some(h0()), Some(h1()) ), (t0(), t1()))
@@ -123,6 +126,8 @@ case object Empty extends Stream[Nothing]
 case class Cons[+A](h: () => A, t: () => Stream[A]) extends Stream[A]
 
 object Stream {
+  // this is a smart constructor: it memoizes the value to be returned by the head,
+  // so we are sure this value is cached and evaluated only when the head function is actually called
   def cons[A](hd: => A, tl: => Stream[A]): Stream[A] = {
     lazy val head = hd
     lazy val tail = tl
@@ -132,9 +137,10 @@ object Stream {
   def empty[A]: Stream[A] = Empty
 
   def apply[A](as: A*): Stream[A] =
-    if (as.isEmpty) empty 
+    if (as.isEmpty) empty
     else cons(as.head, apply(as.tail: _*))
 
+  //corecursion/infinite streams
   val ones: Stream[Int] = Stream.cons(1, ones)
 
   //Ex 5.8
