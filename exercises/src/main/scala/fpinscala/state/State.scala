@@ -79,6 +79,7 @@ object RNG {
     go(Nil, rng, count)
   }
 
+  //define a type alias for a function from RNG to (A, RNG) that generalizes what we've been doing so far
   type Rand[+A] = RNG => (A, RNG)
 
   val int: Rand[Int] = _.nextInt
@@ -199,4 +200,15 @@ object State {
 
   def sequence[S, A](fs: List[State[S, A]]): State[S, List[A]] = fs.foldRight(State.unit[S, List[A]](Nil))((a: State[S, A], b: State[S, List[A]]) => a.map2(b)((head: A, tail: List[A]) => head :: tail))
 
+}
+
+
+object TestState extends App {
+  val rng = RNG.Simple(123123)
+  val (next, nextRng) = rng.nextInt
+  println((next, nextRng))
+  val (next2, nextRng2) = nextRng.nextInt
+  println((next2, nextRng2))
+
+  //TODO: add more tests
 }
