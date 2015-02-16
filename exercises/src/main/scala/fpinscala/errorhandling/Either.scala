@@ -39,9 +39,9 @@ case class Right[+A](get: A) extends Either[Nothing,A]
 
 object Either {
   def mean(xs: IndexedSeq[Double]): Either[String, Double] = 
-    if (xs.isEmpty) 
+    if (xs.isEmpty)
       Left("mean of empty list!")
-    else 
+    else
       Right(xs.sum / xs.length)
 
   def safeDiv(x: Int, y: Int): Either[Exception, Int] = 
