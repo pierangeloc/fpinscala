@@ -93,12 +93,12 @@ object RNG {
       (f(a), rng2)
     }
 
-  //Ex 6.6
-  def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = (rng: RNG) => {
-    val (a, rng1) = ra(rng)
-    val (b, rng2) = rb(rng1)
-    (f(a, b), rng2)
-  }
+    //Ex 6.6
+    def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = (rng: RNG) => {
+      val (a, rng1) = ra(rng)
+      val (b, rng2) = rb(rng1)
+      (f(a, b), rng2)
+    }
 
   def both[A, B](ra: Rand[A], rb: Rand[B]): Rand[(A, B)] = map2(ra, rb)((_, _))
   def randIntDouble: Rand[(Int, Double)] = both(int, double)

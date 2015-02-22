@@ -165,9 +165,11 @@ object Examples extends App {
 //  val x = unit(4)
 //  equal(es)(fork(x), x)
 
-  val singleThreadedEs = Executors.newSingleThreadExecutor();
+  val singleThreadedEs = Executors.newFixedThreadPool(2)//SingleThreadExecutor();
 
+  //deadlock with fork!
   val a = lazyUnit(42 + 1)
-  println(fork(a)(singleThreadedEs).get())
-//  println(equal(singleThreadedEs)(fork(a), a))
+//  println(fork(a)(Executors.newSingleThreadExecutor()).get())
+  //we can have deadlock of any fixed thread pool!
+//  println(fork(fork(a))(Executors.newFixedThreadPool(2)))
 }
