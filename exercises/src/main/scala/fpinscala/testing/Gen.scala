@@ -12,27 +12,108 @@ import java.util.concurrent.{Executors,ExecutorService}
 The library developed in this chapter goes through several iterations. This file is just the
 shell, which you can fill in and modify while working through the chapter.
 */
+//
+//trait Prop {
+//  //check should communicate either a failure with description of the failure + nr of successes before failure, or a nr of successes
+//  def check: Either[(FailedCase, SuccessCount), SuccessCount]
+//}
 
-trait Prop {
-  //check should communicate either a failure with description of the failure + nr of successes before failure, or a nr of successes
-  def check: Either[(FailedCase, SuccessCount), SuccessCount]
+sealed trait Result {
+  def isFalsified: Boolean
+}
+
+//this is a singleton
+case object Passed extends Result {
+  def isFalsified = false
+}
+
+//this is not a singleton, just a case class
+case class Falsified(failure: FailedCase, successes: SuccessCount) extends Result {
+  def isFalsified = true
+}
+
+case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
+
+  //TODO: see how to express the failure in left/right using tag
+  def && (p: Prop) = Prop((maxSize, n, rng) => run(maxSize, n, rng) match {
+    case Passed => p.run(maxSize, n, rng)
+    case Falsified(f, s) => Falsified(f, s)
+  })
+
+
+  def || (p: Prop) = Prop((maxSize, n, rng) => run(maxSize, n, rng) match {
+    case Passed => Passed
+    case Falsified(f, s) => p.run(maxSize, n, rng)
+  })
+
+  //given the property, enrich the representation of the falsified case
+  def tag(msg: String) = Prop((maxSize, n, rng) => run(maxSize, n, rng) match {
+    case Passed => Passed
+    case Falsified(f, s) => Falsified(msg + "\n" + f, s)
+  })
+
+
 }
 
 object Prop {
   type FailedCase = String
   type SuccessCount = Int
+  type TestCases = Int
+  type MaxSize = Int
 
-  def forAll[A](gen: Gen[A])(f: A => Boolean): Prop = ???
+  def forAll[A](sgen: SGen[A])(f: A => Boolean): Prop = ???
+
+  //construct a property, ready for run
+  def forAll[A](gen: Gen[A])(f: A => Boolean): Prop = Prop( (maxSize, n, rng) =>
+    randomStream(gen)(rng).zip(Stream.from(0)).take(n).map {
+      case (a, iteration) => try {
+        if(f(a)) Passed
+        else Falsified(a.toString, iteration)
+      } catch {
+        case exception:Exception => Falsified(buildMsg(a, exception), iteration)
+      }
+    } //Stream of Results
+    .find(_.isFalsified).getOrElse(Passed)
+  )
+
+
+
+  //stream of values coming from the generator g, with rng as source for randomness
+  private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
+    Stream.unfold(rng)(rng => Some(g.sample.run(rng)))
+
+  //build message when having exception on run with value s
+  private def buildMsg[A](s: A, e: Exception): String =
+    s"test case: $s\n" +
+    s"generated an exception: ${e.getMessage}\n" +
+    s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
+}
+
+
+//SGen needs a size and creates a generator for that max size
+case class SGen[+A](forSize: Int => Gen[A])  {
+
+  def map[B](f: A => B) = SGen(n => forSize(n).map(f))
+
+  def flatMap[B](f: A => Gen[B]): SGen[B] = SGen(n => forSize(n).flatMap(f))
+
 }
 
 case class Gen[A] (sample: State[RNG, A]){
 
+  //converts a Gen to a sized Gen, just from the point of view of the definition
+  def unsized: SGen[A] = SGen(_ => this)
+
+  def map[B](f: A => B): Gen[B] = Gen(sample.map(f))
+
   //Ex 8.6
   def flatMap[B](f: A => Gen[B]): Gen[B] = Gen(sample.flatMap(f(_).sample))
+
 //  def listOfN(size: Gen[Int]): Gen[List[A]] = Gen(for {
 //    sampledSize <- size.sample
 //    list <- Gen.listOfN(sampledSize, this)
 //  } yield list)
+
   def listOfN(size: Gen[Int]): Gen[List[A]] = size flatMap(n => Gen.listOfN(n, this))
 
 
@@ -50,15 +131,8 @@ object Gen {
   //Ex 8.8
   def weighted[A](g1: (Gen[A], Double), g2: (Gen[A], Double)): Gen[A] = Gen(State(RNG.double)).flatMap(x => if(x < g1._2 / (g1._2 + g2._2)) g1._1 else g2._1)
 
-}
-
-//trait Gen[A] {
-//  def map[A,B](f: A => B): Gen[B] = ???
-//  def flatMap[A,B](f: A => Gen[B]): Gen[B] = ???
-//}
-
-trait SGen[+A] {
-
+  //Ex 8.12
+  def listOf[A](g: Gen[A]): SGen[List[A]] = SGen(listOfN(_, g))
 }
 
 object TestState extends App {

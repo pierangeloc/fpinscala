@@ -101,6 +101,8 @@ trait Stream[+A] {
     case _ => None
   }
 
+  def zip[B](bs:Stream[B]) = zipWith(bs)((x, y) => ((x, y)))
+
   //this continues to zip as long as at least one stream has elements
   def zipAll[B](s1: Stream[B]): Stream[(Option[A], Option[B])] = {
     Stream.unfold((this, s1)) {
