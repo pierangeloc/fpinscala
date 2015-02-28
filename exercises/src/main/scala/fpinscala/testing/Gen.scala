@@ -32,6 +32,12 @@ case class Falsified(failure: FailedCase, successes: SuccessCount) extends Resul
   def isFalsified = true
 }
 
+/**
+ * A property is defined by its run method that takes a maxSize, a nr of test cases and a random number generator,
+ * and produces a result that says if property holds or not. This means that the property must hold in itself information to validate if
+ * the generated values satisfy it or not
+ * @param run
+ */
 case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
 
   //TODO: see how to express the failure in left/right using tag
@@ -63,7 +69,10 @@ object Prop {
 
   def forAll[A](sgen: SGen[A])(f: A => Boolean): Prop = ???
 
-  //construct a property, ready for run
+    /**
+     * construct a property, given the generator and the function to validate the generated value
+     * We build a stream of generated values and we check if the property holds for it, at first failure we give up
+     */
   def forAll[A](gen: Gen[A])(f: A => Boolean): Prop = Prop( (maxSize, n, rng) =>
     randomStream(gen)(rng).zip(Stream.from(0)).take(n).map {
       case (a, iteration) => try {
@@ -77,6 +86,27 @@ object Prop {
   )
 
 
+  /**
+   * Create a property to check given a sized generator (g) and the property holding function
+   * We generate a certain nr of cases per size, then a property for each size
+   * For each size we run the each property a number of cases per size, then merge them together
+   * The result is due to all the property being satisfied, for all the (growing) sizes
+   *
+   * @param g
+   * @param f
+   * @tparam A
+   * @return
+   */
+  def forAll[A](g: Int => Gen[A])(f: A => Boolean): Prop = Prop( (maxSize, n, rng) => {
+    val casesPerSize = (n + maxSize - 1) / maxSize
+    //stream of properties, one per size, using the generator per size
+    val props = Stream.from(0).take((n min maxSize) + 1).map(i => forAll(g(i))(f))
+    //we map the properties to run only casesPerSize times per property, and then reduce them to one single property
+    val prop = props.map(p => Prop((max, nr, rng) => p.run(max, casesPerSize, rng))).toList.reduce(_ && _)
+
+    //run the property
+    prop.run(maxSize, n, rng)
+  })
 
   //stream of values coming from the generator g, with rng as source for randomness
   private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
@@ -99,6 +129,12 @@ case class SGen[+A](forSize: Int => Gen[A])  {
 
 }
 
+
+/**
+ * Generator is built around the sample (function) that generates values of type A
+ * @param sample
+ * @tparam A
+ */
 case class Gen[A] (sample: State[RNG, A]){
 
   //converts a Gen to a sized Gen, just from the point of view of the definition
