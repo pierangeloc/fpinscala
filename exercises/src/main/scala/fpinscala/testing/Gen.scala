@@ -67,7 +67,9 @@ object Prop {
   type TestCases = Int
   type MaxSize = Int
 
-  def forAll[A](sgen: SGen[A])(f: A => Boolean): Prop = ???
+  //TODO: Report errata
+  def forAll[A](sgen: SGen[A])(f: A => Boolean): Prop = forAll(sgen.forSize(_))(f)
+
 
     /**
      * construct a property, given the generator and the function to validate the generated value
@@ -101,7 +103,7 @@ object Prop {
     val casesPerSize = (n + maxSize - 1) / maxSize
     //stream of properties, one per size, using the generator per size
     val props = Stream.from(0).take((n min maxSize) + 1).map(i => forAll(g(i))(f))
-    //we map the properties to run only casesPerSize times per property, and then reduce them to one single property
+    //we map the properties to run only casesPerSize times per property, and then reduce them to one single property, satisfied when they are all satisfied
     val prop = props.map(p => Prop((max, nr, rng) => p.run(max, casesPerSize, rng))).toList.reduce(_ && _)
 
     //run the property
@@ -117,18 +119,19 @@ object Prop {
     s"test case: $s\n" +
     s"generated an exception: ${e.getMessage}\n" +
     s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
+
+
 }
 
 
 //SGen needs a size and creates a generator for that max size
-case class SGen[+A](forSize: Int => Gen[A])  {
+case class SGen[A](forSize: Int => Gen[A])  {
 
   def map[B](f: A => B) = SGen(n => forSize(n).map(f))
 
   def flatMap[B](f: A => Gen[B]): SGen[B] = SGen(n => forSize(n).flatMap(f))
 
 }
-
 
 /**
  * Generator is built around the sample (function) that generates values of type A
@@ -137,7 +140,7 @@ case class SGen[+A](forSize: Int => Gen[A])  {
  */
 case class Gen[A] (sample: State[RNG, A]){
 
-  //converts a Gen to a sized Gen, just from the point of view of the definition
+  //converts a Gen to a sized Gen, returning always the same generator regardless of the size
   def unsized: SGen[A] = SGen(_ => this)
 
   def map[B](f: A => B): Gen[B] = Gen(sample.map(f))
@@ -151,7 +154,6 @@ case class Gen[A] (sample: State[RNG, A]){
 //  } yield list)
 
   def listOfN(size: Gen[Int]): Gen[List[A]] = size flatMap(n => Gen.listOfN(n, this))
-
 
 }
 
@@ -169,6 +171,7 @@ object Gen {
 
   //Ex 8.12
   def listOf[A](g: Gen[A]): SGen[List[A]] = SGen(listOfN(_, g))
+  def listOf1[A](g: Gen[A]): SGen[List[A]] = SGen(n => listOfN(n + 1, g))
 }
 
 object TestState extends App {
@@ -184,5 +187,40 @@ object TestState extends App {
 
   val myListOf10 = Gen.listOfN(10, Gen.boolean)
   println(myListOf10.sample.run(next))
+
+
+  val smallInteger = Gen.choose(-10, 10)
+  val maxProperty = forAll(listOf1(smallInteger)) {
+    list => {
+      val max = list.max
+      list.forall(_ <= max)
+    }
+  }
+
+  val sortedProperty = forAll(listOf1(smallInteger)) {
+    list => {
+      val sortedList = list.sorted
+      sortedList.foldLeft(Some(sortedList.head): Option[Int])((left: Option[Int], right) => {
+        left match {
+          case Some(leftNr) => if(leftNr <= right) Some(right) else None
+          case None => None
+        }
+      }) match {
+        case Some(_) => true
+        case _ => false
+      }
+    }
+  }
+
+
+  def run(p: Prop, maxSize: MaxSize = 100, testCases: TestCases = 100, rng: RNG = RNG.Simple(System.currentTimeMillis())): Unit =
+  p.run(maxSize, testCases, rng) match {
+    case Passed => println(s"OK, passed $testCases tests.")
+    case Falsified(failure, successes) => println(s"! Falsified after $successes successful restults: \n $failure")
+  }
+
+  println(run(maxProperty))
+
+  println(run(sortedProperty))
 }
 
