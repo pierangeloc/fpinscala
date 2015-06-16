@@ -20,15 +20,36 @@ object Monoid {
     val zero = Nil
   }
 
-  val intAddition: Monoid[Int] = sys.error("todo")
+  val intAddition: Monoid[Int] = new Monoid[Int] {
+    def op(a1: Int, a2: Int) = a1 + a2
+    def zero = 0
+  }
 
-  val intMultiplication: Monoid[Int] = sys.error("todo")
+  val intMultiplication: Monoid[Int] = new Monoid[Int] {
+    def op(a1: Int, a2: Int) = a1 + a2
+    def zero = 1
+  }
 
-  val booleanOr: Monoid[Boolean] = sys.error("todo")
+  val booleanOr: Monoid[Boolean] = new Monoid[Boolean] {
+    def op(a1: Boolean, a2: Boolean) = a1 && a2
+    def zero = true
+  }
 
-  val booleanAnd: Monoid[Boolean] = sys.error("todo")
+  val booleanAnd: Monoid[Boolean] = new Monoid[Boolean] {
+    def op(a1: Boolean, a2: Boolean) = a1 || a2
+    def zero = false
+  }
 
-  def optionMonoid[A]: Monoid[Option[A]] = sys.error("todo")
+  def optionMonoid[A]: Monoid[Option[A]] = new Monoid[Option[A]] {
+    def op(a1: Option[A], a2: Option[A]): Option[A] = {
+      //return first option if not None, else the second one
+      map2(a1, a2)((x, y) => x) orElse(a2)
+    }
+
+    def zero: Option[A] = None
+  }
+
+  def map2[A, B, C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = a flatMap((valA: A) => b map ((valB: B) => f(valA, valB)))
 
   def endoMonoid[A]: Monoid[A => A] = sys.error("todo")
 
