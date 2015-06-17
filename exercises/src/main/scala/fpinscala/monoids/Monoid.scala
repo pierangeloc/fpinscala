@@ -49,20 +49,31 @@ object Monoid {
     def zero: Option[A] = None
   }
 
+  //let's reimplement the map2 for convenience
   def map2[A, B, C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = a flatMap((valA: A) => b map ((valB: B) => f(valA, valB)))
 
-  def endoMonoid[A]: Monoid[A => A] = sys.error("todo")
+
+  def endoMonoid[A]: Monoid[A => A] = new Monoid[A => A] {
+    def op(f1: A => A, f2: A => A): A => A = f1 andThen f2
+    //zero is the identity function
+    def zero = (a: A) => a
+  }
 
   // TODO: Placeholder for `Prop`. Remove once you have implemented the `Prop`
   // data type from Part 2.
-  trait Prop {}
+//  trait Prop {}
 
   // TODO: Placeholder for `Gen`. Remove once you have implemented the `Gen`
   // data type from Part 2.
 
   import fpinscala.testing._
   import Prop._
-  def monoidLaws[A](m: Monoid[A], gen: Gen[A]): Prop = sys.error("todo")
+
+  def monoidLaws[A](m: Monoid[A], gen: Gen[A]): Prop = Prop.forAll(Gen.listOfN(3, gen).map{
+    case a :: b :: c :: Nil => (a, b, c)
+  }) {
+    case (x, y, z) => m.op(m.op(x, y), z) == m.op(x, m.op(y, z)) && m.op(m.zero, x) == m.op(x, m.zero)
+  }
 
   def trimMonoid(s: String): Monoid[String] = sys.error("todo")
 
