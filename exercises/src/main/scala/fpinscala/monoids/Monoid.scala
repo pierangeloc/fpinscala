@@ -44,6 +44,8 @@ object Monoid {
     def op(a1: Option[A], a2: Option[A]): Option[A] = {
       //return first option if not None, else the second one
       map2(a1, a2)((x, y) => x) orElse(a2)
+      //much simpler to just do:
+      a1 orElse a2
     }
 
     def zero: Option[A] = None
@@ -72,7 +74,10 @@ object Monoid {
   def monoidLaws[A](m: Monoid[A], gen: Gen[A]): Prop = Prop.forAll(Gen.listOfN(3, gen).map{
     case a :: b :: c :: Nil => (a, b, c)
   }) {
-    case (x, y, z) => m.op(m.op(x, y), z) == m.op(x, m.op(y, z)) && m.op(m.zero, x) == m.op(x, m.zero)
+    case (x, y, z) => m.op(m.op(x, y), z) == m.op(x, m.op(y, z))
+  } &&
+  Prop.forAll(gen){
+    case x => m.op(m.zero, x) == m.op(x, m.zero)
   }
 
   def trimMonoid(s: String): Monoid[String] = sys.error("todo")
