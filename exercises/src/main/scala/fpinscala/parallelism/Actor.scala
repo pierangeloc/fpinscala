@@ -95,17 +95,17 @@ final case class Actor[A](strategy: Strategy)(handler: A => Unit, onError: Throw
 
 private class Node[A](var a: A = null.asInstanceOf[A]) extends AtomicReference[Node[A]]
 
-object Actor {
+object ActorFactory {
 
   /** Create an `Actor` backed by the given `ExecutorService`. */
-  def apply[A](es: ExecutorService)(handler: A => Unit, onError: Throwable => Unit = throw(_)): Actor[A] = 
+  def apply[A](es: ExecutorService)(handler: A => Unit = (a: A) => println(a), onError: Throwable => Unit = throw(_)): Actor[A] =
     Actor(Strategy.fromExecutorService(es))(handler, onError)
 }
 
-/** 
+/**
  * Provides a function for evaluating expressions, possibly asynchronously. 
  * The `apply` function should typically begin evaluating its argument 
- * immediately. The returned thunk can be used to block until the resulting `A` 
+ * immediately. The returned thunk can be used to block until the resulting `A`
  * is available.
  */
 trait Strategy {
@@ -114,18 +114,18 @@ trait Strategy {
 
 object Strategy {
 
-  /** 
+  /**
    * We can create a `Strategy` from any `ExecutorService`. It's a little more
    * convenient than submitting `Callable` objects directly. 
    */
   def fromExecutorService(es: ExecutorService): Strategy = new Strategy {
     def apply[A](a: => A): () => A = {
-      val f = es.submit { new Callable[A] { def call = a} } 
+      val f = es.submit { new Callable[A] { def call = a} }
       () => f.get
     }
   }
 
-  /** 
+  /**
    * A `Strategy` which begins executing its argument immediately in the calling thread.
    */
   def sequential: Strategy = new Strategy {
