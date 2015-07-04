@@ -116,13 +116,25 @@ object Monoid {
       }
   }
 
+  //Ex 10.9
   def ordered(ints: IndexedSeq[Int]): Boolean = {
-    val monoid = new Monoid[(Int, Boolean)] {
-      val zero = (Int.MaxValue, true)
-      def op(a1: (Int, Boolean), a2: (Int, Boolean)): (Int, Boolean) = if(a2._2 && a1._1 < a2._1) (a1._1, true) else (a2._1, false)
+
+    val monoid = new Monoid[(Option[Int], Boolean)] {
+      val zero = (None, true)
+      def op(a1: (Option[Int], Boolean), a2: (Option[Int], Boolean)): (Option[Int], Boolean) =
+          (a1, a2) match {
+            case ((None, _), a2Value) => a2Value // implement Zero law
+            case (a1Value, (None, _)) => a1Value // commutative
+            case ((_, false), (_,_)) => (Some(Int.MinValue), false)
+            case ((_,_), (_, false)) => (Some(Int.MinValue), false)
+            case ((Some(a1Val), true), (Some(a2Val), true)) if (a1Val <= a2Val) => (Some(a1Val), true)
+            case (_,_) => (Some(Int.MinValue), false)
+           }
     }
 
-    foldMapV(ints, monoid)((a: Int) => (a, true))._2
+    foldMapV(ints, monoid)((a: Int) => (Some(a), true)) match {
+      case (_, isOrdered) => isOrdered
+    }
   }
 
   sealed trait WC
