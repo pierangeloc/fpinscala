@@ -151,13 +151,45 @@ object Monoid {
 
   def count(s: String): Int = ???
 
-  def productMonoid[A, B](A: Monoid[A], B: Monoid[B]): Monoid[(A, B)] = ???
 
-  def functionMonoid[A, B](B: Monoid[B]): Monoid[A => B] = ???
+  //monoids composition
+  //Any pair of monoids induces a monoid on the pair.
+  def productMonoid[A, B](A: Monoid[A], B: Monoid[B]): Monoid[(A, B)] = new Monoid[(A, B)] {
+    def op(a1: (A, B), a2: (A, B)): (A, B) = (A.op(a1._1, a2._1), B.op(a1._2, a2._2))
+    def zero: (A, B) = (A.zero, B.zero)
+  }
 
-  def mapMergeMonoid[K, V](V: Monoid[V]): Monoid[Map[K, V]] = ???
+  //a target type with monoids induces a monoid on functions to that target space
+  def functionMonoid[A, B](B: Monoid[B]): Monoid[A => B] = new Monoid[(A) => B] {
+    def op(a1: (A) => B, a2: (A) => B): (A) => B = a => B.op(a1(a), a2(a))
+    def zero: (A) => B = a => B.zero
+  }
 
-  def bag[A](as: IndexedSeq[A]): Map[A, Int] = ???
+  //We define a monoid on maps with values on monoids, where the keys are the union of keys and the values are the operated values if keys are shared, otherwise the value present in one of the maps
+  /**
+   *
+   * scala>  val m1 = Map("a" -> List(1,2,3,4), "b" -> List(5,6,7,8))
+   * m1: scala.collection.immutable.Map[String,List[Int]] = Map(a -> List(1, 2, 3, 4), b -> List(5, 6, 7, 8))
+   *
+   * scala> val m2 = Map("c" -> List(10, 11, 12, 13), "b"-> List(100, 101, 102, 103))
+   * m2: scala.collection.immutable.Map[String,List[Int]] = Map(c -> List(10, 11, 12, 13), b -> List(100, 101, 102, 103))
+   *
+   * scala> mapMergeMonoid(listMonoid[Int]).op(m1, m2)
+   * res0: Map[String,List[Int]] = Map(a -> List(1, 2, 3, 4), b -> List(5, 6, 7, 8, 100, 101, 102, 103), c -> List(10, 11, 12, 13))
+   *
+   */
+  def mapMergeMonoid[K, V](V: Monoid[V]): Monoid[Map[K, V]] = new Monoid[Map[K, V]] {
+    override def op(a1: Map[K, V], a2: Map[K, V]): Map[K, V] = (a1.keys ++ a2.keys).foldLeft(zero) {
+      (tempMap, key) => tempMap.updated(key, V.op(a1.getOrElse(key, V.zero), a2.getOrElse(key, V.zero)))
+    }
+    override def zero: Map[K, V] = Map[K,V]()
+  }
+
+  /**
+   * scala> bag(Array("a", "a", "b", "c", "a", "q", "b"))
+   * res1: Map[String,Int] = Map(a -> 3, b -> 2, c -> 1, q -> 1)
+   */
+  def bag[A](as: IndexedSeq[A]): Map[A, Int] = foldMapV(as, mapMergeMonoid[A, Int](Monoid.intAddition))(a => Map(a -> 1))
 
 }
 
@@ -170,17 +202,17 @@ trait Foldable[F[_]] {
 
   import Monoid._
 
-  def foldRight[A, B](as: F[A])(z: B)(f: (A, B) => B): B = ???
+  def foldRight[A, B](as: F[A])(z: B)(f: (A, B) => B): B
 
-  def foldLeft[A, B](as: F[A])(z: B)(f: (B, A) => B): B = ???
+  def foldLeft[A, B](as: F[A])(z: B)(f: (B, A) => B): B
 
-  def foldMap[A, B](as: F[A])(f: A => B)(mb: Monoid[B]): B = ???
+  def foldMap[A, B](as: F[A])(f: A => B)(mb: Monoid[B]): B = foldLeft(as)(mb.zero)((b, a) => mb.op(b, f(a)))
 
   def concatenate[A](as: F[A])(m: Monoid[A]): A =
-    sys.error("todo")
+    foldLeft(as)(m.zero)(m.op)
 
   def toList[A](as: F[A]): List[A] =
-    sys.error("todo")
+    foldRight(as)(List[A]())(_ :: _)
 }
 
 object ListFoldable extends Foldable[List] {
@@ -188,28 +220,30 @@ object ListFoldable extends Foldable[List] {
     as.foldRight(z)(f)
 
   override def foldLeft[A, B](as: List[A])(z: B)(f: (B, A) => B) =
-    sys.error("todo")
+    as.foldLeft(z)(f)
 
   override def foldMap[A, B](as: List[A])(f: A => B)(mb: Monoid[B]): B =
-    sys.error("todo")
+    foldLeft(as)(mb.zero)((b, a) => mb.op(b, f(a)))
 }
 
 object IndexedSeqFoldable extends Foldable[IndexedSeq] {
   override def foldRight[A, B](as: IndexedSeq[A])(z: B)(f: (A, B) => B) =
-    sys.error("todo")
+    as.foldRight(z)(f)
 
   override def foldLeft[A, B](as: IndexedSeq[A])(z: B)(f: (B, A) => B) =
-    sys.error("todo")
+    as.foldLeft(z)(f)
 
   override def foldMap[A, B](as: IndexedSeq[A])(f: A => B)(mb: Monoid[B]): B =
-    sys.error("todo")
+    Monoid.foldMapV(as, mb)(f)
+
+//  or alternatively: foldLeft(as)(mb.zero)((b, a) => mb.op(b, f(a)))
 }
 
 object StreamFoldable extends Foldable[Stream] {
   override def foldRight[A, B](as: Stream[A])(z: B)(f: (A, B) => B) =
-    sys.error("todo")
+    as.foldRight(z)(f)
   override def foldLeft[A, B](as: Stream[A])(z: B)(f: (B, A) => B) =
-    sys.error("todo")
+    as.foldLeft(z)(f)
 }
 
 sealed trait Tree[+A]
@@ -218,26 +252,36 @@ case class Leaf[A](value: A) extends Tree[A]
 
 case class Branch[A](left: Tree[A], right: Tree[A]) extends Tree[A]
 
+
+/**
+ * val t  = Branch(Branch(Leaf(3), Leaf(4)), Branch(Leaf(5), Branch(Leaf(-15), Leaf(900))))
+ * TreeFoldable.foldLeft(t)(1)((x, y) => x * 10000)
+ */
 object TreeFoldable extends Foldable[Tree] {
   override def foldMap[A, B](as: Tree[A])(f: A => B)(mb: Monoid[B]): B =
-    ???
+    as match {
+      case Leaf(a) => f(a)
+      case Branch(l, r) => mb.op(foldMap(l)(f)(mb), foldMap(l)(f)(mb))
+    }
 
   override def foldLeft[A, B](as: Tree[A])(z: B)(f: (B, A) => B) =
-    ???
+    foldMap(as)((a: A) => ((b: B) => f(b, a)))(Monoid.endoMonoid[B])(z)
 
   override def foldRight[A, B](as: Tree[A])(z: B)(f: (A, B) => B) =
-    ???
+    foldMap(as)(f.curried)(Monoid.endoMonoid[B])(z)
 }
+
+
 
 object OptionFoldable extends Foldable[Option] {
   override def foldMap[A, B](as: Option[A])(f: A => B)(mb: Monoid[B]): B =
-    ???
+    as map f getOrElse(mb.zero)
 
   override def foldLeft[A, B](as: Option[A])(z: B)(f: (B, A) => B) =
-    ???
+    as map(f(z, _)) getOrElse(z)
 
   override def foldRight[A, B](as: Option[A])(z: B)(f: (A, B) => B) =
-    sys.error("todo")
+    as map(f(_, z)) getOrElse(z)
 }
 
 
