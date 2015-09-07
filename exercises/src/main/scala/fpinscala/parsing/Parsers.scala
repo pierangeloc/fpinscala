@@ -52,25 +52,25 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
 
   object Laws {
 
-
-    run("alpha")("alphabeta") == Right("alpha")
-
-    run("alpha" | "beta")("alphabeta") == Right("alpha")
-    run("alpha" | "beta")("betaalpha") == Right("beta")
-
-    run(listOfN(3, "ab" | "cad"))("abcadcad") == Right(List("ab", "cad", "cad"))
-    run(listOfN(3, "ab" | "cad"))("ababab") = Right(List("ab", "ab", "ab"))
-    run(listOfN(3, "ab" | "cad"))("cadabab") == Right(List("cad", "ab", "ab"))
-
+//
+//    run("alpha")("alphabeta") == Right("alpha")
+//
+//    run("alpha" | "beta")("alphabeta") == Right("alpha")
+//    run("alpha" | "beta")("betaalpha") == Right("beta")
+//
+//    run(listOfN(3, "ab" | "cad"))("abcadcad") == Right(List("ab", "cad", "cad"))
+//    run(listOfN(3, "ab" | "cad"))("ababab") = Right(List("ab", "ab", "ab"))
+//    run(listOfN(3, "ab" | "cad"))("cadabab") == Right(List("cad", "ab", "ab"))
+//
 
 
   }
 }
 
 object Me extends App {
-  val p: Parsers[Parser[String]] = null
-  import p._
-  "abra" | "cadabra"
+//  val p: Parsers[Parser[String]] = null
+//  import p._
+//  "abra" | "cadabra"
 
 }
 

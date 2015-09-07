@@ -10,9 +10,11 @@ import parallelism.Par._
 trait Functor[F[_]] {
   def map[A,B](fa: F[A])(f: A => B): F[B]
 
+  //the effect is the same as a Zip operation, we construct types of the same kind from pairs, just using map and projection operators
   def distribute[A,B](fab: F[(A, B)]): (F[A], F[B]) =
     (map(fab)(_._1), map(fab)(_._2))
 
+  
   def codistribute[A,B](e: Either[F[A], F[B]]): F[Either[A, B]] = e match {
     case Left(fa) => map(fa)(Left(_))
     case Right(fb) => map(fb)(Right(_))
@@ -23,6 +25,16 @@ object Functor {
   val listFunctor = new Functor[List] {
     def map[A,B](as: List[A])(f: A => B): List[B] = as map f
   }
+
+  /**
+   *
+   *    scala> val pairsList = List((1,"a"), (2,"b"), (3, "c"))
+   *            pairsList: List[(Int, String)] = List((1,a), (2,b), (3,c))
+   *
+   *  distribute does the same as unzip
+   *    scala> listFunctor.distribute(pairsList)
+   *    res1: (List[Int], List[String]) = (List(1, 2, 3),List(a, b, c))
+   */
 }
 
 trait Monad[M[_]] extends Functor[M] {

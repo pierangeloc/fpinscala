@@ -41,15 +41,15 @@ object Monoid {
   }
 
   val booleanOr: Monoid[Boolean] = new Monoid[Boolean] {
-    def op(a1: Boolean, a2: Boolean) = a1 && a2
-
-    def zero = true
-  }
-
-  val booleanAnd: Monoid[Boolean] = new Monoid[Boolean] {
     def op(a1: Boolean, a2: Boolean) = a1 || a2
 
     def zero = false
+  }
+
+  val booleanAnd: Monoid[Boolean] = new Monoid[Boolean] {
+    def op(a1: Boolean, a2: Boolean) = a1 && a2
+
+    def zero = true
   }
 
   def optionMonoid[A]: Monoid[Option[A]] = new Monoid[Option[A]] {
@@ -63,7 +63,7 @@ object Monoid {
     def zero: Option[A] = None
   }
 
-  //let's reimplement the map2 for convenience
+  //let's reimplement the map2 for convenience6t
   def map2[A, B, C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = a flatMap ((valA: A) => b map ((valB: B) => f(valA, valB)))
 
 
@@ -95,6 +95,7 @@ object Monoid {
   def concatenate[A](as: List[A], m: Monoid[A]): A = as.foldLeft(m.zero)(m.op)
 
   def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B = as.foldLeft(m.zero)((b, a) => m.op(b, f(a)))
+  ￼
 
   def foldMapRight[A, B](as: List[A], m: Monoid[B])(f: A => B): B = as.foldRight(m.zero)((a, b) => m.op(f(a), b))
 
@@ -152,20 +153,21 @@ object Monoid {
   def count(s: String): Int = ???
 
 
-  //monoids composition
-  //Any pair of monoids induces a monoid on the pair.
+  // Monoids Composition
+  // Any pair of monoids induces a monoid on the pair.
   def productMonoid[A, B](A: Monoid[A], B: Monoid[B]): Monoid[(A, B)] = new Monoid[(A, B)] {
     def op(a1: (A, B), a2: (A, B)): (A, B) = (A.op(a1._1, a2._1), B.op(a1._2, a2._2))
     def zero: (A, B) = (A.zero, B.zero)
   }
 
-  //a target type with monoids induces a monoid on functions to that target space
+  // a target type with monoids induces a monoid on functions to that target space
   def functionMonoid[A, B](B: Monoid[B]): Monoid[A => B] = new Monoid[(A) => B] {
     def op(a1: (A) => B, a2: (A) => B): (A) => B = a => B.op(a1(a), a2(a))
     def zero: (A) => B = a => B.zero
   }
 
-  //We define a monoid on maps with values on monoids, where the keys are the union of keys and the values are the operated values if keys are shared, otherwise the value present in one of the maps
+  // We define a monoid on maps with values on monoids, where the keys are the union of keys and the values
+  // are the operated values if keys are shared, otherwise the value present in one of the maps
   /**
    *
    * scala>  val m1 = Map("a" -> List(1,2,3,4), "b" -> List(5,6,7,8))

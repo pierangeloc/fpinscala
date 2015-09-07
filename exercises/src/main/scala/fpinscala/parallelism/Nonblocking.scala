@@ -61,7 +61,7 @@ object Nonblocking {
         def apply(cb: C => Unit): Unit = {
           var ar: Option[A] = None
           var br: Option[B] = None
-          val combiner = Actor[Either[A,B]](es) {
+          val combiner = ActorFactory[Either[A,B]](es) {
             case Left(a) =>
               if (br.isDefined) eval(es)(cb(f(a,br.get)))
               else ar = Some(a)
