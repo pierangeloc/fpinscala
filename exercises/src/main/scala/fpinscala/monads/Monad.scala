@@ -10,11 +10,11 @@ import parallelism.Par._
 trait Functor[F[_]] {
   def map[A,B](fa: F[A])(f: A => B): F[B]
 
-  //the effect is the same as a Zip operation, we construct types of the same kind from pairs, just using map and projection operators
+  //the effect is the same as an Unzip operation, we construct types of the same kind from pairs, just using map and projection operators
   def distribute[A,B](fab: F[(A, B)]): (F[A], F[B]) =
     (map(fab)(_._1), map(fab)(_._2))
 
-  
+  //if we have a type that is e.g. either List[String] or List[Int], we can map it to a List[Either[String, Int]] depending on the actual type of the incoming list
   def codistribute[A,B](e: Either[F[A], F[B]]): F[Either[A, B]] = e match {
     case Left(fa) => map(fa)(Left(_))
     case Right(fb) => map(fb)(Right(_))

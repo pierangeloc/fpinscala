@@ -3,6 +3,8 @@ package fpinscala.parallelism
 import java.util.Date
 import java.util.concurrent._
 
+import scala.util.Random
+
 object Par {
   type Par[A] = ExecutorService => Future[A]
   
@@ -71,12 +73,13 @@ object Par {
     map2(unit(f(a)), unit(()))((a, b) => a)
   }
 
+  //this isn't good as it forces the forking in the definition, while forking should be an option for the execution step
   def asyncF2[A, B](f: A => B): A => Par[B] = (a: A) => fork(unit(f(a)))
 
   def map[A,B](pa: Par[A])(f: A => B): Par[B] = 
     map2(pa, unit(()))((a,_) => f(a))
 
-  def parMap[A,B](ps: List[A])(f: A => B): Par[List[B]] = {
+  def parMap[A,B](ps: List[A])(f: A => B): Par[List[B]] = fork {
     //list of par[B]
     sequence(ps.map(asyncF(f)))
 
@@ -123,10 +126,47 @@ object Par {
   def delay[A](fa: => Par[A]): Par[A] = 
     es => fa(es)
 
+  //Ex 7.11
   def choice[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =
     es => 
       if (run(es)(cond).get) t(es) // Notice we are blocking on the result of `cond`.
       else f(es)
+
+
+  def choiceN[A](n: Par[Int])(choices: List[Par[A]]): Par[A] = es =>{
+    val index: Int = run(es)(n).get()
+    if (index < 0 || index > choices.size)
+      choices(0)(es)
+    else
+      choices(index)(es)
+  }
+
+  def choiceFromChoiceN[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] = {
+    choiceN(map(cond)((b: Boolean) => if(b) 0 else 1))(List(t, f))
+  }
+
+  //Ex 7.12/13
+  def choiceMap[K, V](key: Par[K])(choices: Map[K, Par[V]]): Par[V] = es => {
+    val k = run(es)(key).get()
+    run(es)(choices(k))
+  }
+
+  // this combinator is nothing but a flatMap
+  def generalCombinator[K,V](key: Par[K])(choices: K => Par[V]): Par[V] = es => {
+    val k = run(es)(key).get()
+    run(es)(choices(k))
+  }
+
+  def flatMap[A, B](p: Par[A])(f: A => Par[B]): Par[B] = generalCombinator(p)(f)
+
+  //Ex 7.14
+  //flatten
+  def join[A](a: Par[Par[A]]): Par[A] = es =>
+    run(es)(run(es)(a).get())
+
+  def flatMapViaJoin[A, B](p: Par[A])(f: A => Par[B]): Par[B] = join(map(p)(f))
+  def joinViaFlatMap[A](a: Par[Par[A]]): Par[A] = flatMap(a)(par => par)
+
 
   /* Gives us infix syntax for `Par`. */
   implicit def toParOps[A](p: Par[A]): ParOps[A] = new ParOps(p)
@@ -172,4 +212,23 @@ object Examples extends App {
 //  println(fork(a)(Executors.newSingleThreadExecutor()).get())
   //we can have deadlock of any fixed thread pool!
 //  println(fork(fork(a))(Executors.newFixedThreadPool(2)))
+
+  val pAlpha = unit("α")
+  val pBeta = unit("β")
+  val pGamma = unit("γ")
+  val pDelta = unit("δ")
+
+  val pRandomBoolean = map(unit(()))(_ => new Random().nextBoolean())
+  val choiceAlphaOrBeta: Par[String] = choice(pRandomBoolean)(pAlpha, pBeta)
+
+  println("choice")
+  println (run(Executors.newFixedThreadPool(10))(choiceAlphaOrBeta).get())
+
+  println("choices")
+  val p0_3 = map(unit(()))(_ => new Random().nextInt(4))
+  val choiceAlphaToGamma: Par[String] = choiceN(p0_3)(List(pAlpha, pBeta, pGamma, pDelta))
+  println (run(Executors.newFixedThreadPool(10))(choiceAlphaToGamma).get())
+
+
+
 }
