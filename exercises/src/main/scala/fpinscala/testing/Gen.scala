@@ -43,7 +43,7 @@ case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
   //TODO: see how to express the failure in left/right using tag
   def && (p: Prop) = Prop((maxSize, n, rng) => run(maxSize, n, rng) match {
     case Passed => p.run(maxSize, n, rng)
-    case Falsified(f, s) => Falsified(f, s)
+    case anything => anything
   })
 
 
@@ -68,7 +68,7 @@ object Prop {
   type MaxSize = Int
 
   //TODO: Report errata
-  def forAll[A](sgen: SGen[A])(f: A => Boolean): Prop = forAll(sgen.forSize(_))(f)
+  def forAll[A](sgen: SGen[A])(f: A => Boolean): Prop = forAll(sgen.forSize)(f)
 
 
     /**
@@ -127,9 +127,11 @@ object Prop {
 //SGen needs a size and creates a generator for that max size
 case class SGen[A](forSize: Int => Gen[A])  {
 
-  def map[B](f: A => B) = SGen(n => forSize(n).map(f))
+  def apply(n: Int): Gen[A] = forSize(n)
 
-  def flatMap[B](f: A => Gen[B]): SGen[B] = SGen(n => forSize(n).flatMap(f))
+  def map[B](f: A => B) = SGen(apply(_).map(f))
+
+  def flatMap[B](f: A => Gen[B]): SGen[B] = SGen(apply(_).flatMap(f))
 
 }
 
@@ -160,7 +162,7 @@ case class Gen[A] (sample: State[RNG, A]){
 object Gen {
   def unit[A](a: => A): Gen[A] = Gen(State(RNG.unit(a)))
   def boolean: Gen[Boolean] = Gen(State(RNG.nonNegativeLessThan(2)).map(_ % 2 == 0))
-  def listOfN[A](n: Int, g: Gen[A]): Gen[List[A]] = Gen(State.sequence(List.fill(n)(0).map(_ => g.sample)))
+  def listOfN[A](n: Int, g: Gen[A]): Gen[List[A]] = Gen(State.sequence(List.fill(n)(g.sample)))
   def choose(start: Int, stopExclusive: Int): Gen[Int] = Gen(State[RNG, Int](RNG.nonNegativeLessThan(stopExclusive - start)).map(_ + start))
 
   //Ex 8.7
@@ -171,7 +173,7 @@ object Gen {
 
   //Ex 8.12
   def listOf[A](g: Gen[A]): SGen[List[A]] = SGen(listOfN(_, g))
-  def listOf1[A](g: Gen[A]): SGen[List[A]] = SGen(n => listOfN(n + 1, g))
+  def listOf1[A](g: Gen[A]): SGen[List[A]] = SGen(n => listOfN(n max 1, g))
 }
 
 object TestState extends App {
