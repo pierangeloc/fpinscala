@@ -27,9 +27,14 @@ case object Passed extends Result {
   def isFalsified = false
 }
 
-//this is not a singleton, just a case class
 case class Falsified(failure: FailedCase, successes: SuccessCount) extends Result {
   def isFalsified = true
+}
+
+
+//for properties that must be verified in absolute, without reference to generated values:
+case object Proved extends Result {
+  def isFalsified = false
 }
 
 /**
@@ -43,18 +48,21 @@ case class Prop(run: (MaxSize, TestCases, RNG) => Result) {
   //TODO: see how to express the failure in left/right using tag
   def && (p: Prop) = Prop((maxSize, n, rng) => run(maxSize, n, rng) match {
     case Passed => p.run(maxSize, n, rng)
+    case Proved => p.run(maxSize, n, rng)
     case anything => anything
   })
 
 
   def || (p: Prop) = Prop((maxSize, n, rng) => run(maxSize, n, rng) match {
     case Passed => Passed
+    case Proved => Passed
     case Falsified(f, s) => p.run(maxSize, n, rng)
   })
 
   //given the property, enrich the representation of the falsified case
   def tag(msg: String) = Prop((maxSize, n, rng) => run(maxSize, n, rng) match {
     case Passed => Passed
+    case Proved => Proved
     case Falsified(f, s) => Falsified(msg + "\n" + f, s)
   })
 
@@ -87,6 +95,16 @@ object Prop {
     .find(_.isFalsified).getOrElse(Passed)
   )
 
+  private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
+    Stream.unfold(rng)(rng => Some(g.sample.run(rng)))
+
+  //build message when having exception on run with value s
+  private def buildMsg[A](s: A, e: Exception): String =
+    s"test case: $s\n" +
+      s"generated an exception: ${e.getMessage}\n" +
+      s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
+
+
 
   /**
    * Create a property to check given a sized generator (g) and the property holding function
@@ -110,17 +128,49 @@ object Prop {
     prop.run(maxSize, n, rng)
   })
 
+
+
+  //Properties of parallel executions
+  //generates executors 75% - 25%
+  val ExecutorsGen = weighted(
+    choose(1, 4).map(Executors.newFixedThreadPool) -> 0.75,
+    unit(Executors.newCachedThreadPool) -> 0.25
+  )
+
+  //defines a property
+  def forAllPar[A](g: Gen[A])(f: A => Par[Boolean]): Prop = forAll(ExecutorsGen ** g){case (executor, a) => f(a)(executor).get()}
   //stream of values coming from the generator g, with rng as source for randomness
-  private def randomStream[A](g: Gen[A])(rng: RNG): Stream[A] =
-    Stream.unfold(rng)(rng => Some(g.sample.run(rng)))
-
-  //build message when having exception on run with value s
-  private def buildMsg[A](s: A, e: Exception): String =
-    s"test case: $s\n" +
-    s"generated an exception: ${e.getMessage}\n" +
-    s"stack trace:\n ${e.getStackTrace.mkString("\n")}"
 
 
+
+
+
+
+
+  /**
+   * Utility function to test generic properties with  given masSize and testCases
+   * @param p
+   * @param maxSize
+   * @param testCases
+   * @param rng
+   */
+  def run(p: Prop, maxSize: MaxSize = 100, testCases: TestCases = 100, rng: RNG = RNG.Simple(System.currentTimeMillis())): Unit =
+    p.run(maxSize, testCases, rng) match {
+      case Passed => println(s"OK, passed $testCases tests.")
+      case Falsified(failure, successes) => println(s"! Falsified after $successes successful restults: \n $failure")
+      case Proved => println(s"OK, proved property.")
+    }
+
+  /**
+   * Utility function to prove properties that don't need to undergo test cases generation
+   * @param p
+   * @return
+   */
+  def check(p: => Boolean): Prop = Prop(
+    (_, _, _) => if (p) Proved else Falsified("()", 0)
+  )
+
+  def checkPar(p: Par[Boolean]) = forAllPar(Gen.unit(()))(_ => p)
 }
 
 
@@ -157,6 +207,10 @@ case class Gen[A] (sample: State[RNG, A]){
 
   def listOfN(size: Gen[Int]): Gen[List[A]] = size flatMap(n => Gen.listOfN(n, this))
 
+  def map2[B, C](g: Gen[B])(f: (A, B) => C): Gen[C] = flatMap(a => g.map(f(a, _)))
+
+  //combine 2 generators in`zto pairs
+  def **[B](g: Gen[B]): Gen[(A, B)] = map2(g)((_,_))
 }
 
 object Gen {
@@ -215,14 +269,54 @@ object TestState extends App {
   }
 
 
-  def run(p: Prop, maxSize: MaxSize = 100, testCases: TestCases = 100, rng: RNG = RNG.Simple(System.currentTimeMillis())): Unit =
-  p.run(maxSize, testCases, rng) match {
-    case Passed => println(s"OK, passed $testCases tests.")
-    case Falsified(failure, successes) => println(s"! Falsified after $successes successful restults: \n $failure")
-  }
 
+  println("Testing max property")
   println(run(maxProperty))
 
+  println("Testing sorted property")
   println(run(sortedProperty))
+
+  println("Testing equality of Par: Par.map(Par.unit(1))(_ + 1) == Par.unit(2)")
+  //property to verify: Par.map(Par.unit(1))(_ + 1) == Par.unit(2)
+  val executorService = Executors.newCachedThreadPool();
+  run (Prop.check {
+    val p1 = Par.map(Par.unit(1))(_ + 1)
+    val p2 = Par.unit(2)
+    p1(executorService).get() == p2(executorService).get()
+  })
+
+  def equal[A](p1: Par[A], p2: Par[A]): Par[Boolean] = Par.map2(p1, p2)(_ == _)
+
+  println("alternative implementation")
+  run(Prop.check {
+    val p1 = Par.map(Par.unit(1))(_ + 1)
+    val p2 = Par.unit(2)
+    equal(p1, p2)(executorService).get()
+  })
+
+  println("implementation with checkPar")
+  val parProp = Prop.checkPar(
+    equal(
+      Par.map(Par.unit(1))(_ + 1), Par.unit(2)
+    )
+  )
+
+  run(parProp)
+
+
+  //Ex 8.17
+  val pInt: Gen[Par[Int]] = Gen.choose(0, 10).map(Par.unit(_))
+  forAllPar(pInt)(par => equal(par, Par.fork(par)))
+
+  //Ex 8.18
+  val list = List(1,2,3,4,5,6)
+  val listGen = Gen.listOf(Gen(State(RNG.int)))
+  def predicate: (Int) => Boolean = _ > 0
+  val takeAndDropUnited: Prop = Prop.forAll(listGen)(l => l.takeWhile(predicate) ++ l.dropWhile(predicate) == l)
+  Prop.run(takeAndDropUnited)
+
+  //Ex 8.19
+  def genStringIntFn(g: Gen[Int]): Gen[String => Int] = g.flatMap(i => Gen.unit(s => s.length + i))
+
 }
 
