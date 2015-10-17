@@ -10,13 +10,19 @@ trait Parser[A] {
 
 trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trait
 
+
   def map[A, B](p: Parser[A])(f: A => B): Parser[B]
+
+  //apply parser p and then apply the one returned by f on the rest, and return the parsed value
+  def flatMap[A, B](p: Parser[A])(f: A => Parser[B]): Parser[B]
 
   def run[A](p: Parser[A])(s: String): Either[ParseError, A]
 
   def or[A](p1: Parser[A], p2: => Parser[A]): Parser[A]
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]]
+
+
 
   /**
    * Define a new parser that applies first p1, then p2 and combines their extracted results with a combining function f that returns a C
@@ -68,6 +74,28 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
   def startsWithAndFollow(a: Char, b: Char): Parser[(SuccessCount, SuccessCount)] = map2(counter(a), countOneOrMore(b))((_,_))
 
   /**
+   * Ex 9.6: parse a String starting with a digit n and continuing with n repetition of character c
+   * @param c
+   */
+  def parseNChar(c: Char) = "[0-9]".r.flatMap(n => listOfN(n.toInt, char(c)))
+
+  /**
+   * Ex 9.7
+   */
+  def productViaFlatMap[A, B](p1: Parser[A], p2: Parser[B]): Parser[(A, B)] = p1.flatMap(a => p2.map(b => (a, b)))
+  def map2ViaFlatMap[A, B, C](p1: Parser[A], p2: Parser[B])(f: (A, B) => C) = p1.flatMap(a => p2.map(b => f(a, b)))
+
+  /**
+   * Ex 9.8
+   */
+  def mapViaFlatMap[A, B](p: Parser[A])(f: A => B) = p.flatMap(a => succeed(f(a)))
+
+  /**
+   * Parse and recognize any String that matches the provided regex
+   */
+  implicit def regex(r: Regex): Parser[String]
+
+  /**
    *   implicit conversion, gives a parser whenever it expects a Parser but finds a String
    */
   implicit def string(s: String): Parser[String]
@@ -90,6 +118,7 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
     def | [B >: A](p2: Parser[B]): Parser[B] = self.or(p, p2)
     def or [B >: A](p2: Parser[B]): Parser[B] = self.or(p, p2)
     def map[B](f: A => B) = self.map(p)(f)
+    def flatMap[B](f: A => Parser[B]) = self.flatMap(p)(f)
     def many = self.many(p)
     def slice = self.slice(p)
     def product[B](p2: Parser[B]) = self.product(p, p2)
@@ -127,7 +156,7 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
 
     //Ex 9.2
     def unbiasL[A, B, C](p: ((A, B), C)): (A, B, C) = (p._1._1, p._1._2, p._2)
-    def unbiasR[A, B, C](p: (A, (B, C)): (A, B, C) = (p._1, p._2._1, p._2._2)
+    def unbiasR[A, B, C](p: (A, (B, C))): (A, B, C) = (p._1, p._2._1, p._2._2)
 
     def productIsAlmostAssociative[A](p1: Parser[A], p2: Parser[A], p3: Parser[A]) = equal((p1 ** (p2 ** p3)).map(unbiasR), ((p1 ** p2) ** p3).map(unbiasL))
     def productAndMap[A,B,C,D](p1: Parser[A], f: A => B, p2: Parser[C], g: C => D) = equal(p1.map(f) ** p2.map(g) , p1 ** p2 .map {case (x, y) => (f(x), g(y))})
