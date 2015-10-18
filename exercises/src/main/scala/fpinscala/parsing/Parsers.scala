@@ -22,7 +22,18 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
 
   def listOfN[A](n: Int, p: Parser[A]): Parser[List[A]]
 
+  /**
+   * Attempts the parsers ???
+   */
+  def attempt[A](p: Parser[A]): Parser[A]
 
+  def opt[A](p: Parser[A]): Parser[Option[A]] =
+    p.map(Some(_)) or succeed(None)
+
+  /**
+   * Provide parser with an error message to be used in case of failure
+   */
+  def label[A](msg: String)(p: Parser[A]): Parser[A]
 
   /**
    * Define a new parser that applies first p1, then p2 and combines their extracted results with a combining function f that returns a C
@@ -91,6 +102,35 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
   def mapViaFlatMap[A, B](p: Parser[A])(f: A => B) = p.flatMap(a => succeed(f(a)))
 
   /**
+   * Consume one or more digits
+   */
+  def digits: Parser[String] = "\\d+".r
+
+  /**
+   * Consume a string that represents a double
+   * @return
+   */
+  def doubleString: Parser[String] = "[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?".r
+
+  /**
+   * Sequence 2 parsers and ignore the result of the first one
+   */
+  def skipL[A](pLeft: Parser[Any], p: Parser[A]): Parser[A] = map2(slice(pLeft), p)((l, r) => r)
+
+  /**
+   * Sequence 2 parsers, ignoring the result of the second one
+   */
+  def skipR[A](p: Parser[A], pRight: Parser[Any]) = map2(p, slice(pRight))((l, r) => l)
+
+  def token(t: String): Parser[String] = string(t)
+
+  /**
+   * Parser which consumes one or more whitespaces
+   */
+  def whiteSpaces: Parser[String] = "\\s*".r
+
+
+  /**
    * Parse and recognize any String that matches the provided regex
    */
   implicit def regex(r: Regex): Parser[String]
@@ -123,6 +163,8 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
     def slice = self.slice(p)
     def product[B](p2: Parser[B]) = self.product(p, p2)
     def **[B](p2: Parser[B]) = product(p2)
+    def *>[B](p2: Parser[B]) = self.skipL(p, p2)
+    def <*(p2: Parser[Any]) = self.skipR(p, p2)
 
 
   }
@@ -158,8 +200,8 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
     def unbiasL[A, B, C](p: ((A, B), C)): (A, B, C) = (p._1._1, p._1._2, p._2)
     def unbiasR[A, B, C](p: (A, (B, C))): (A, B, C) = (p._1, p._2._1, p._2._2)
 
-    def productIsAlmostAssociative[A](p1: Parser[A], p2: Parser[A], p3: Parser[A]) = equal((p1 ** (p2 ** p3)).map(unbiasR), ((p1 ** p2) ** p3).map(unbiasL))
-    def productAndMap[A,B,C,D](p1: Parser[A], f: A => B, p2: Parser[C], g: C => D) = equal(p1.map(f) ** p2.map(g) , p1 ** p2 .map {case (x, y) => (f(x), g(y))})
+    def productIsAlmostAssociative[A](p1: Parser[A], p2: Parser[A], p3: Parser[A])(gs: Gen[String]) = equal((p1 ** (p2 ** p3)).map(unbiasR), ((p1 ** p2) ** p3).map(unbiasL))(gs)
+    def productAndMap[A,B,C,D](p1: Parser[A], f: A => B, p2: Parser[C], g: C => D)(gs: Gen[String]) = equal(p1.map(f) ** p2.map(g) , (p1 ** p2) map {case (x, y) => (f(x), g(y))})(gs)
 
   }
 }
