@@ -38,7 +38,7 @@ trait Parsers[Parser[+_]] { self => // so inner classes may call methods of trai
   /**
    * Define a new parser that applies first p1, then p2 and combines their extracted results with a combining function f that returns a C
    */
-  def map2[A, B, C](p1: Parser[A], b: => Parser[B])(f: (A, B) => C): Parser[C] = ???
+  def map2[A, B, C](p1: Parser[A], b: => Parser[B])(f: (A, B) => C): Parser[C] = p1.flatMap(ax => b.map(bx => f(ax, bx)))
 
   def char(c: Char): Parser[Char] = string(c.toString).map(_.charAt(0))
 

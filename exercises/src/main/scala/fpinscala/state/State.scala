@@ -178,8 +178,8 @@ object State {
 
   def mutate(machine: Machine, input: Input): Machine = {
     (machine, input) match {
-      case (Machine(true, candies, coins), Coin) if candies > 0 => Machine(false, candies, coins + 1)
-      case (Machine(false, candies, coins), Turn) => Machine(true, candies - 1, coins)
+      case (Machine(true, candies, coins), Coin) if candies > 0 => Machine(locked = false, candies, coins + 1)
+      case (Machine(false, candies, coins), Turn) => Machine(locked = true, candies - 1, coins)
 
       case (machine1, _) => machine1
 

@@ -1,7 +1,7 @@
 package fpinscala
 package monads
 
-import parsing._
+import fpinscala.parsing._
 import testing._
 import parallelism._
 import state._
@@ -10,11 +10,11 @@ import parallelism.Par._
 trait Functor[F[_]] {
   def map[A,B](fa: F[A])(f: A => B): F[B]
 
-  //the effect is the same as an Unzip operation, we construct types of the same kind from pairs, just using map and projection operators
+  /** Distribute a functor of product type into a product of functor**/
   def distribute[A,B](fab: F[(A, B)]): (F[A], F[B]) =
     (map(fab)(_._1), map(fab)(_._2))
 
-  //if we have a type that is e.g. either List[String] or List[Int], we can map it to a List[Either[String, Int]] depending on the actual type of the incoming list
+  /** Distribute a sum (coproduct) type of functor into a functor of coproducts **/
   def codistribute[A,B](e: Either[F[A], F[B]]): F[Either[A, B]] = e match {
     case Left(fa) => map(fa)(Left(_))
     case Right(fb) => map(fb)(Right(_))
@@ -72,15 +72,32 @@ object Monad {
 //      ma flatMap f
   }
 
-  val parMonad: Monad[Par] = ???
+  val parMonad: Monad[Par] = new Monad[Par] {
+    def unit[A](a: => A): Par[A] = Par.unit(a)
+    def flatMap[A, B](ma: Par[A])(f: A => Par[B]): Par[B] = Par.flatMap(ma)(f)
+  }
 
-  def parserMonad[P[+_]](p: Parsers[P]): Monad[P] = ???
+  def parserMonad[P[+_]](p: Parsers[P]): Monad[P] = new Monad[P] {
 
-  val optionMonad: Monad[Option] = ???
+    def unit[A](a: => A): P[A] = p.succeed(a)
+    def flatMap[A, B](ma: P[A])(f: A => P[B]): P[B] = p.flatMap(ma)(f)
+  }
 
-  val streamMonad: Monad[Stream] = ???
+  val optionMonad: Monad[Option] = new Monad[Option] {
+    def unit[A](a: => A): Option[A] = Some(a)
+    def flatMap[A, B](ma: Option[A])(f: A => Option[B]) = ma.flatMap(f)
 
-  val listMonad: Monad[List] = ???
+  }
+
+  val streamMonad: Monad[Stream] = new Monad[Stream] {
+    def unit[A](a: => A): Stream[A] = Stream(a)
+    def flatMap[A, B](ma: Stream[A])(f: A => Stream[B]): Stream[B] = ma.flatMap(f)
+  }
+
+  val listMonad: Monad[List] = new Monad[List] {
+    def unit[A](a: => A): List[A] = List(a)
+    def flatMap[A, B](ma: List[A])(f: A => List[B]): List[B] = ma.flatMap(f)
+  }
 
   def stateMonad[S] = ???
 

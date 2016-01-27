@@ -116,6 +116,13 @@ object Monoid {
       }
   }
 
+  import fpinscala.parallelism.Nonblocking._
+  def par[A](m: Monoid[A]): Monoid[Par[A]] = new Monoid[Par[A]] {
+    def op(a1: Par[A], a2: Par[A]): Par[A] = ???
+
+    def zero: Par[A] = ???
+  }
+
   //Ex 10.9
   def ordered(ints: IndexedSeq[Int]): Boolean = {
 
