@@ -150,8 +150,6 @@ object Monoid {
 
   case class Part(lStub: String, words: Int, rStub: String) extends WC
 
-  def par[A](m: Monoid[A]): Monoid[Par[A]] = ???
-
   def parFoldMap[A, B](v: IndexedSeq[A], m: Monoid[B])(f: A => B): Par[B] = ???
 
   def wcMonoid: Monoid[WC] = ???
