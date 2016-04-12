@@ -53,6 +53,10 @@ trait Monad[M[_]] extends Functor[M] {
 
   def traverse[A,B](la: List[A])(f: A => M[B]): M[List[B]] = la.foldRight(unit(List[B]()))((el, tail) => map2(f(el), tail)(_ :: _))
 
+
+  /**
+    *  Ex 11.4
+    */
   def replicateM[A](n: Int, ma: M[A]): M[List[A]] = sequence(List.fill(n)(ma))
 
   /**
@@ -77,18 +81,42 @@ trait Monad[M[_]] extends Functor[M] {
     }
   }
 
-  def compose[A,B,C](f: A => M[B], g: B => M[C]): A => M[C] = ???
+  /**
+    * Ex 11.7
+    * Implement the Kleisli composition in terms of flatmap
+    */
+  def compose[A,B,C](f: A => M[B], g: B => M[C]): A => M[C] = { a =>
+    flatMap(f(a))(g)
+  }
 
-  // Implement in terms of `compose`:
-  def _flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = ???
+  /**
+    * Ex 11.8: Implement in terms of `compose`:
+    * */
 
-  def join[A](mma: M[M[A]]): M[A] = ???
+  def _flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = {
 
-  // Implement in terms of `join`:
-  def __flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = ???
+    //my original solution: apply identity (except from a flatten operation in between) to the original monad ma, and then compose with f
+    //    compose(unit[M[A]] andThen(flatMap(_)(unit[M[A]])), f)(ma)
+
+    // Author's solution: Create a function that transform a unit to the monad ma, and compose it with f. The function could have been equally accepting
+    // any integer and applied to an integer, e.g.:
+    //    compose((_: Int) => ma, f)(1)
+    compose((_: Unit) => ma, f)(())
+  }
+
+  /** Ex 11.12
+    * Implemnet join, aka flatten
+    **/
+  def join[A](mma: M[M[A]]): M[A] = flatMap(mma)(x => x)
+
+  /**
+    *  Ex 11.13 Implement flatmap in terms of `join`:
+    */
+  def __flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = join(map(ma)(f))
+
 }
 
-case class Reader[R, A](run: R => A)
+
 
 object Monad {
   /**
@@ -127,7 +155,7 @@ object Monad {
   }
 
   /**
-    * State[S, A] defines monadic operations for a given type S, therefore we have a _family_ of monads, one for every type S
+    * State[S, A] defines monadic operations for a given state type S, therefore we have a _family_ of monads, one for every type S
     * So, we need to parameterize the monad on S
     * One way is to include code in a class parameterized on S
     * Another way is to define a structural type and access its type projection
@@ -140,20 +168,64 @@ object Monad {
     def flatMap[A, B](sa: State[S, A])(f: A => State[S, B]): State[S, B] = sa.flatMap(f)
   }
 
-  val idMonad: Monad[Id] = ???
+  /**
+    * Ex 11.18
+    * - The meaning of replicateM in a state monad, is like chaining M state transformations and keeping the output values in the final list
+    * - map2 chains the first state transformation with the second one, and transforms the output through the given function of 2 arguments
+    * - sequence will chain all the state transformations together, save the single outputs and provide them as a final output in the list
+    */
+
+  /**
+    * Ex 11.19
+    * getState(setState(s)) === s
+    * for {
+    * x <- getState
+    * _ <- setState(x)
+    * } yield ()
+    *
+    * for {
+    * _ <- setState(s)
+    * x <- getState
+    * } yield x === s
+    * when A = S, unit(s) = setState(s)
+    */
+
+
+
+  val idMonad: Monad[Id] = new Monad[Id] {
+    def unit[A](a: => A): Id[A] = Id(a)
+    def flatMap[A, B](ma: Id[A])(f: (A) => Id[B]): Id[B] = ma.flatMap(f)
+  }
 
   def readerMonad[R] = ???
 }
 
+/**
+  * Ex 11.17
+  * @param value
+  * @tparam A
+  */
 case class Id[A](value: A) {
-  def map[B](f: A => B): Id[B] = ???
-  def flatMap[B](f: A => Id[B]): Id[B] = ???
+  def map[B](f: A => B): Id[B] = Id(f(value))
+  def flatMap[B](f: A => Id[B]): Id[B] = f(value)
 }
 
+/**
+  * Ex 11.20
+  * Reader monad reads from a context and extracts a value from the context. We have like for the State monad, a family of monads, one per type of context
+  * - unit reads always the same value
+  * - flatMap chains 2 reads, one that extracts A, and then applies the reader function that comes from the application of f to the returned value on the first read, to the same context
+  * - sequence of reader monads groups in a list the extraction of values from the initial context, that is shared across all the monads in the list
+  * - replicateM returns the list of values extracted from reading from the same context n times
+  * - unit law means that if I read one value out of the context and then apply anoter read that just reads the same value, it's the same as just applying 1 read
+  * - associative law means that if I have to read 3 values out of a context, I can read equivalently the first 2 and then the third, or the first one and then the second and third, or equivalently, ignore the parenthesization of extraction order
+  *
+  */
+case class Reader[R, A](run: R => A)
 object Reader {
   def readerMonad[R] = new Monad[({type f[x] = Reader[R,x]})#f] {
-    def unit[A](a: => A): Reader[R,A] = ???
-    override def flatMap[A,B](st: Reader[R,A])(f: A => Reader[R,B]): Reader[R,B] = ???
+    def unit[A](a: => A): Reader[R,A] = Reader(_ => a)
+    def flatMap[A,B](st: Reader[R,A])(f: A => Reader[R,B]): Reader[R,B] = Reader(r => f(st.run(r)).run(r))
   }
 }
 
