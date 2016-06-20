@@ -1,5 +1,7 @@
-import fpinscala.applicative
-import fpinscala.applicative.Applicative
+import java.text.SimpleDateFormat
+import java.util.Date
+
+import fpinscala.applicative.{Applicative, Failure, Success, Validation}
 
 val F: Applicative[Option] = new Applicative[Option] {
 
@@ -30,4 +32,41 @@ val s2 = Stream.from(1000)
 val s3 = Stream.continually("Constant")
 
 streamApplicative.sequence(List(s1, s2, s3)).take(4).toList
+
+//form validation with Validation applicative
+case class WebForm(name: String, birthdate: Date, phoneNumber: String)
+//We want:
+// -  name.length > 0,
+// -  birthdate format = 'yyyy-MM-dd'
+// -  phoneNumber.length = 10
+
+def validName(name: String): Validation[String, String] = {
+  if (name.length > 0) Success(name)
+  else Failure("Name is empty", Vector())
+}
+
+def validBirthdate(birthdate: String): Validation[String, Date] = {
+  try {
+    Success(new SimpleDateFormat("yyyy-MM-dd").parse(birthdate))
+  } catch {
+    case _: Throwable => Failure("Date should match yyyy-MM-dd", Vector())
+  }
+}
+
+def validPhoneNumber(phone: String): Validation[String, String] = {
+  if(phone.matches("[0-9]{10}")) Success(phone)
+  else Failure("Phone number should be 10 digits", Vector())
+}
+
+import fpinscala.applicative.Applicative.validationApplicative
+def validateWebForm(name: String, birthdate: String, phoneNumber: String) = validationApplicative.map3(
+  validName(name),
+  validBirthdate(birthdate),
+  validPhoneNumber(phoneNumber)
+)(WebForm(_,_,_))
+
+validateWebForm("R. Feynman", "1918-05-11", "0123456789")
+validateWebForm("", "1918-05-11", "0123456789")
+validateWebForm("", "19181231231-0weqwe5-11", "0123456789")
+validateWebForm("R. Feynman", "1918-05-11", "0123456789012")
 

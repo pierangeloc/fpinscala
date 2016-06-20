@@ -136,14 +136,15 @@ object Applicative {
     * Ex 12.6
     */
   def validationApplicative[E]: Applicative[({type f[x] = Validation[E,x]})#f] =  new Applicative[({type f[x] = Validation[E,x]})#f] {
-    override def map2[A, B, C](fa: Validation[E, A], fb: Validation[E, B])(f: (A, B) => C): Validation[E, C] = (fa, fb) match {
+
+    def map2[A, B, C](fa: Validation[E, A], fb: Validation[E, B])(f: (A, B) => C): Validation[E, C] = (fa, fb) match {
       case (Failure(ha, ta), Failure(hb, tb)) => Failure(ha, hb +: (tb ++ ta))
       case (fa@Failure(_, _), _) => fa
       case (_, fb@Failure(_, _)) => fb
       case (Success(a), Success(b)) => Success(f(a, b))
     }
 
-    override def unit[A](a: => A): Validation[E, A] = Success(a)
+    def unit[A](a: => A): Validation[E, A] = Success(a)
   }
 
 //  type Const[A, B] = A
