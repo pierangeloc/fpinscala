@@ -4,11 +4,13 @@ package applicative
 import monads.Functor
 import state._
 import State._
+import fpinscala.testing.Prop
 import jdk.nashorn.internal.runtime.regexp.joni.constants.Traverse
 //import StateUtil._ // defined at bottom of this file
 import monoids._
 
 trait Applicative[F[_]] extends Functor[F] {
+  self =>
 
   //primitive: map2 & unit
   def map2[A,B,C](fa: F[A], fb: F[B])(f: (A, B) => C): F[C]
@@ -17,7 +19,7 @@ trait Applicative[F[_]] extends Functor[F] {
 
   //all applicatives are functors:
   def map[A,B](fa: F[A])(f: A => B): F[B] = map2(fa, unit())((a, _) => f(a))
-//    apply(unit(f))(fa)
+  //    apply(unit(f))(fa)
 
   /**
     * Ex 12.1
@@ -26,7 +28,6 @@ trait Applicative[F[_]] extends Functor[F] {
 
   def traverse[A,B](as: List[A])(f: A => F[B]): F[List[B]] = as.foldRight(unit(List[B]()))((a, fa) => map2(f(a), fa)(_ :: _))
 
-//  def product[G[_]](G: Applicative[G]): Applicative[({type f[x] = (F[x], G[x])})#f] = ???
 
   def product[A,B](fa: F[A], fb: F[B]): F[(A,B)] = map2(fa, fb)((_, _))
 
@@ -46,19 +47,88 @@ trait Applicative[F[_]] extends Functor[F] {
     * Ex 12.3
     */
   def map3[A, B, C, D](fa: F[A],
-                       fb: F[B],
-                       fc: F[C])(f: (A, B, C) => D): F[D] = apply(apply(apply(unit(f.curried))(fa))(fb))(fc)
+  fb: F[B],
+  fc: F[C])(f: (A, B, C) => D): F[D] = apply(apply(apply(unit(f.curried))(fa))(fb))(fc)
 
   def map4[A, B, C, D, E](fa: F[A],
-                       fb: F[B],
-                       fc: F[C],
-                       fd:F[D])(f: (A, B, C, D) => E): F[E] = apply(apply(apply(apply(unit(f.curried))(fa))(fb))(fc))(fd)
+  fb: F[B],
+  fc: F[C],
+  fd:F[D])(f: (A, B, C, D) => E): F[E] = apply(apply(apply(apply(unit(f.curried))(fa))(fb))(fc))(fd)
 
+  /**
+    * Ex 12.8: product of 2 applicatives
+    */
+  def product[G[_]](G: Applicative[G]): Applicative[({type f[x] = (F[x], G[x])})#f] = new Applicative[({type f[x] = (F[x], G[x])})#f] {
+    //primitive: map2 & unit
+    override def map2[A, B, C](faGa: (F[A], G[A]), fbGb: (F[B], G[B]))(f: (A, B) => C): (F[C], G[C]) = (faGa, fbGb) match {
+      //want to use first map2 of Applicative[F], then map2 of Applicative[G]
+      case ((fa, ga), (fb, gb)) => (self.map2(fa, fb)((a, b) => f(a, b)), G.map2(ga, gb)((a, b) => f(a, b)))
+    }
 
-  def compose[G[_]](G: Applicative[G]): Applicative[({type f[x] = F[G[x]]})#f] = ???
+    override def unit[A](a: => A): (F[A], G[A]) = (self.unit(a), G.unit(a))
+  }
+
+  /**
+    * Ex 12.9
+    */
+  def compose[G[_]](G: Applicative[G]): Applicative[({type f[x] = F[G[x]]})#f] = new Applicative[({type f[x] = F[G[x]]})#f] {
+
+    def unit[A](a: =>A): F[G[A]] = self.unit(G.unit(a))
+
+    //primitive: map2 & unit
+    def map2[A, B, C](fGa: F[G[A]], fGb: F[G[B]])(f: (A, B) => C): F[G[C]] = self.map2(fGa, fGb)((gA, gB) => G.map2(gA, gB)(f))
+  }
 
   def sequenceMap[K,V](ofa: Map[K,F[V]]): F[Map[K,V]] = ???
 }
+
+
+
+
+/**
+  * Applicative laws
+  */
+trait ApplicativeLaws[F[_]] extends Applicative[F] {
+  /**
+    * 1. Identity law
+    * map2 with identity function projection should behave like the induced map function
+    */
+  def identityLaw[A, B](fa: F[A], fb: F[B]) = {
+    map2(fa, unit())((a, _) => a) == fa
+    map2(unit(), fa)((_, a) => a) == fa
+  }
+
+  /**
+    * Helper transformation
+    */
+  def assoc[A, B, C](t: (A, (B, C))): ((A, B), C) = t match {
+    case (a, (b, c)) => ((a, b), c)
+  }
+
+  /**
+    * 2. Associative Law
+    * combining products one way or another guarantees the same kind of result.
+    * This way map3 or map4 behave the same way regardless of how we decide to group them
+    */
+  def associativeLaw[A, B, C](fa: F[A], fb: F[B], fc: F[C]) = {
+    product(product(fa, fb), fc) == map(product(fa, product(fb, fc)))(assoc)
+  }
+
+  /**
+    * Product of functions
+    */
+  def productF[I, O, I2, O2](f: I => O, g: I2 => O2): (I, I2) => (O, O2) = (i, i2) => (f(i), g(i2))
+
+  /**
+    * 3. Naturality of Product
+    * When combining 2 applicatives, we can apply the transformation before or after having them
+    * combined, and the result is the same
+    */
+  def naturalityOfProduct[A, A1, B, B1](fa: F[A], fb: F[A1])(f: A => B, g: A1 => B1) = {
+    map2(fa, fb)(productF(f, g)) == product(map(fa)(f), map(fb)(g))
+  }
+}
+
 
 case class Tree[+A](head: A, tail: List[Tree[A]])
 
@@ -147,7 +217,9 @@ object Applicative {
     def unit[A](a: => A): Validation[E, A] = Success(a)
   }
 
-//  type Const[A, B] = A
+
+
+  //  type Const[A, B] = A
 //
 //  implicit def monoidApplicative[M](M: Monoid[M]) =
 //    new Applicative[({ type f[x] = Const[M, x] })#f] {
