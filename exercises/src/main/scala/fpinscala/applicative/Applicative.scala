@@ -5,7 +5,6 @@ import monads.Functor
 import state._
 import State._
 import fpinscala.testing.Prop
-import jdk.nashorn.internal.runtime.regexp.joni.constants.Traverse
 //import StateUtil._ // defined at bottom of this file
 import monoids._
 
@@ -246,13 +245,19 @@ object Applicative {
   }
 
 
-
+  /**
+    * Type constructor that transforms any type B to A
+    * Idea is to build an applicative wheree the type constructor maps to a type where we have a monoid
+    * map2 is therefore using the monoid operationinstead of the given f
+    */
   type Const[A, B] = A
 
   implicit def monoidApplicative[M](M: Monoid[M]) =
     new Applicative[({ type f[x] = Const[M, x] })#f] {
       def unit[A](a: => A): M = M.zero
-      override def apply[A,B](m1: M)(m2: M): M = M.op(m1, m2)
+//      override def map2[A,B](m1: M)(m2: M): M = M.op(m1, m2)
+      //primitive: map2 & unit
+      override def map2[A, B, C](fa: Const[M, A], fb: Const[M, B])(f: (A, B) => C): Const[M, C] = M.op(fa, fb)
     }
 }
 
@@ -264,16 +269,23 @@ object Applicative {
 trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
   def traverse[G[_]:Applicative,A,B](fa: F[A])(f: A => G[B]): G[F[B]] =
     sequence(map(fa)(f))
-  def sequence[G[_]:Applicative,A](fma: F[G[A]])(implicit G: Applicative[G]): G[F[A]] //= traverse(fma)(ma => ma)
 
+  def sequence[G[_],A](fma: F[G[A]])(implicit G: Applicative[G]): G[F[A]] //= traverse(fma)(ma => ma)
+
+  /**
+    * Ex 12.14
+    * To respect the signature of traverse and get back an F[B], we must get rid of G.
+    * The Id applicative (from Id Monad) does so
+    * If we traverse F with a given f and use as a joiner the Id, we are done.
+    */
   type Id[A] = A
   val idMonad = new Monad[Id] {
     def unit[A](a: => A) = a
     override def flatMap[A,B](a: A)(f: A => B): B = f(a)
   }
 
-  def map[A,B](fa: F[A])(f: A => B): F[B] =
-    traverse[Id, A, B](fa)(f)(idMonad)
+  def map[A,B](fa: F[A])(f: A => B): F[B]
+//    traverse[Id, A, B](fa)(f)(idMonad)
 
   import Applicative._
 
@@ -281,8 +293,14 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] {
     traverse[({type f[x] = Const[B,x]})#f,A,Nothing](
       as)(f)(monoidApplicative(mb))
 
+  /**
+    * Use the state monad as applicative, and traverse the given structure F[A] with
+    * f: A => State[S, B]
+    */
   def traverseS[S,A,B](fa: F[A])(f: A => State[S, B]): State[S, F[B]] =
     traverse[({type f[x] = State[S,x]})#f,A,B](fa)(f)(Monad.stateMonad)
+
+  import State._
 
   def mapAccum[S,A,B](fa: F[A], s: S)(f: (A, S) => (B, S)): (F[B], S) =
     traverseS(fa)((a: A) => (for {
@@ -312,15 +330,17 @@ case class Tree[+A](head: A, tail: List[Tree[A]])
 object Traverse {
   val listTraverse = new Traverse[List] {
 
-    override def sequence[G[_] : Applicative, A](fma: List[G[A]])(implicit G: Applicative[G]): G[List[A]] = {
+    override def sequence[G[_], A](fma: List[G[A]])(implicit G: Applicative[G]): G[List[A]] = {
       fma.foldRight(G.unit(List[A]()))(G.map2(_, _)(_ :: _))
     }
 
     override def foldRight[A, B](as: List[A])(z: B)(f: (A, B) => B): B = as.foldRight(z)(f)
+
+    override def map[A, B](fa: List[A])(f: (A) => B): List[B] = fa map f
   }
 
   val optionTraverse = new Traverse[Option] {
-    override def sequence[G[_] : Applicative, A](fma: Option[G[A]])(implicit G: Applicative[G]): G[Option[A]] = {
+    override def sequence[G[_], A](fma: Option[G[A]])(implicit G: Applicative[G]): G[Option[A]] = {
       fma match {
         case None => G.unit(None)
         case Some(ga) => G.map(ga)(Some(_))
@@ -331,18 +351,21 @@ object Traverse {
       case None => z
       case Some(a) => f(a, z)
     }
+
+    override def map[A, B](fa: Option[A])(f: (A) => B): Option[B] = fa map f
   }
 
   val treeTraverse = new Traverse[Tree] {
-    override def sequence[G[_] : Applicative, A](fma: Tree[G[A]])(implicit G: Applicative[G]): G[Tree[A]] = fma match {
-      case singleton @ Tree(ga, Nil) => G.map(ga)(a => Tree(a, Nil))
-      case Tree(ga, c :: Nil) => G.map2(ga, sequence(c))((a, child) => Tree(a, child :: Nil))
-      case Tree(ga, cs) => {
-        G.map2(ga, listTraverse.sequence(cs.map(tga => sequence(tga))))(Tree(_, _))
-      }
+    override def sequence[G[_], A](fma: Tree[G[A]])(implicit G: Applicative[G]): G[Tree[A]] = fma match {
+      case Tree(ga, cs) =>
+        G.map2(ga, listTraverse.sequence(cs.map(tga => this.sequence(tga)))(G))(Tree(_, _))
     }
 
     override def foldRight[A, B](as: Tree[A])(z: B)(f: (A, B) => B): B = ???
+
+    override def map[A, B](fa: Tree[A])(f: (A) => B): Tree[B] = fa match {
+      case Tree(head, children) => Tree(f(head), children map (t => map(t)(f)))
+    }
   }
 }
 

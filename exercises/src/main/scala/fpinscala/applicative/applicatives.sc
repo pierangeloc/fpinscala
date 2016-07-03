@@ -2,6 +2,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import fpinscala.applicative.{Applicative, Failure, Success, Validation}
+import fpinscala.state.State
 
 val F: Applicative[Option] = new Applicative[Option] {
 
@@ -69,4 +70,15 @@ validateWebForm("R. Feynman", "1918-05-11", "0123456789")
 validateWebForm("", "1918-05-11", "0123456789")
 validateWebForm("", "19181231231-0weqwe5-11", "0123456789")
 validateWebForm("R. Feynman", "1918-05-11", "0123456789012")
+
+//traverse
+import fpinscala.applicative.Traverse._
+def zipListWithIndex[A](xs: List[A]): List[(Int, A)] = listTraverse.traverseS(xs){
+  a => for {
+    i <- State.get[Int]()
+    _ <- State.set[Int](i + 1)
+  } yield (i, a)
+}.run(0)._1
+
+zipListWithIndex(List("a", "b", "c", "d"))
 

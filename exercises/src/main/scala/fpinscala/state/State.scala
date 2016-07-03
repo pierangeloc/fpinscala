@@ -148,11 +148,13 @@ case class State[S,+A](run: S => (A, S)) {
     (f(v), nextState)
   })
 
-  def map2[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] = State( s => {
-    val (v1, s1) = this.run(s)
-    val (v2, s2) = sb.run(s1)
-    (f(v1, v2), s2)
-  })
+  def map2[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] = flatMap(a => sb.map(b => f(a, b)))
+
+  //  State( s => {
+//    val (v1, s1) = this.run(s)
+//    val (v2, s2) = sb.run(s1)
+//    (f(v1, v2), s2)
+//  })
 
 
   def flatMap[B](f: A => State[S, B]): State[S, B] = State(s => {
@@ -160,11 +162,6 @@ case class State[S,+A](run: S => (A, S)) {
     f(v1).run(s1)
   })
 
-  //to set state to a particular value, remaining in the contract of an output being in shape of State[S, X]
-  def set[S](s: S): State[S, Unit] = State(_ => ((), s))
-
-  //to get the state, a transition from the state s to (s, s) will expose the internal state
-  def get[S](): State[S, S] = State(s => (s, s))
 
 }
 
@@ -199,6 +196,12 @@ object State {
   def unit[S, A](a: A): State[S, A] = State((s: S) => (a, s))
 
   def sequence[S, A](fs: List[State[S, A]]): State[S, List[A]] = fs.foldRight(State.unit[S, List[A]](Nil))((a: State[S, A], b: State[S, List[A]]) => a.map2(b)((head: A, tail: List[A]) => head :: tail))
+
+  //to set state to a particular value, remaining in the contract of an output being in shape of State[S, X]
+  def set[S](s: S): State[S, Unit] = State(_ => ((), s))
+
+  //to get the state, a transition from the state s to (s, s) will expose the internal state
+  def get[S](): State[S, S] = State(s => (s, s))
 
 }
 
