@@ -201,7 +201,7 @@ object State {
   def set[S](s: S): State[S, Unit] = State(_ => ((), s))
 
   //to get the state, a transition from the state s to (s, s) will expose the internal state
-  def get[S](): State[S, S] = State(s => (s, s))
+  def get[S]: State[S, S] = State(s => (s, s))
 
 }
 

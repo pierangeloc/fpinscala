@@ -368,15 +368,3 @@ object Traverse {
     }
   }
 }
-
-// The `get` and `set` functions on `State` are used above,
-// but aren't in the `exercises` subproject, so we include
-// them here
-object StateUtil {
-
-  def get[S]: State[S, S] =
-    State(s => (s, s))
-
-  def set[S](s: S): State[S, Unit] =
-    State(_ => ((), s))
-}

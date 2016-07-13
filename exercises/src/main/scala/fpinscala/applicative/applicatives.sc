@@ -75,7 +75,7 @@ validateWebForm("R. Feynman", "1918-05-11", "0123456789012")
 import fpinscala.applicative.Traverse._
 def zipListWithIndex[A](xs: List[A]): List[(Int, A)] = listTraverse.traverseS(xs){
   a => for {
-    i <- State.get[Int]()
+    i <- State.get[Int]
     _ <- State.set[Int](i + 1)
   } yield (i, a)
 }.run(0)._1
