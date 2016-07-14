@@ -1,31 +1,33 @@
 package fpinscala.iomonad
 
+import scala.io.StdIn.readLine
+
 object IO0 {
-                            /*
+  /**
+    *
+    * Our first attempt at data type for representing computations that
+    * may perform I/O. Has a simple 'interpreter' baked in--the `run`
+    * function, which just returns `Unit`.
+    */
 
-  Our first attempt at data type for representing computations that
-  may perform I/O. Has a simple 'interpreter' baked in--the `run`
-  function, which just returns `Unit`.
-
-                             */
   trait IO { self =>
     def run: Unit
     def ++(io: IO): IO = new IO {
       def run = { self.run; io.run }
     }
   }
+
   object IO {
     def empty: IO = new IO { def run = () }
   }
 
-                            /*
-
-  The API of this `IO` type isn't very useful.  Not many operations
-  (it is only a monoid), and not many laws to help with reasoning. It
-  is completely _opaque_. Also cannot represent _input_ effects, like
-  reading from console, for instance:
-
-                             */
+  /**
+    *
+    * The API of this `IO` type isn't very useful.  Not many operations
+    * (it is only a monoid), and not many laws to help with reasoning. It
+    * is completely _opaque_. Also cannot represent _input_ effects, like
+    * reading from console, for instance:
+    */
 
   def fahrenheitToCelsius(f: Double): Double =
     (f - 32) * 5.0/9.0
@@ -109,19 +111,19 @@ object IO1 {
   // return the list of results.
   val lines: IO[List[String]] = replicateM(10)(ReadLine)
 
-                            /*
+  /*
+   *
+   * Larger example using various monadic combinators. Sample run:
+   *
+   * The Amazing Factorial REPL, v2.0
+   * q - quit
+   * <number> - compute the factorial of the given number
+   * <anything else> - bomb with horrible error
 
-  Larger example using various monadic combinators. Sample run:
 
-     The Amazing Factorial REPL, v2.0
-     q - quit
-     <number> - compute the factorial of the given number
-     <anything else> - bomb with horrible error
-     3
-     factorial: 6
-     7
-     factorial: 5040
-     q
+
+
+
 
                              */
   val helpstring = """
