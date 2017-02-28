@@ -111,7 +111,7 @@ object IO1 {
   // return the list of results.
   val lines: IO[List[String]] = replicateM(10)(ReadLine)
 
-  /*
+  /**
    *
    * Larger example using various monadic combinators. Sample run:
    *
@@ -119,13 +119,7 @@ object IO1 {
    * q - quit
    * <number> - compute the factorial of the given number
    * <anything else> - bomb with horrible error
-
-
-
-
-
-
-                             */
+   */
   val helpstring = """
   | The Amazing Factorial REPL, v2.0
   | q - quit
@@ -168,8 +162,9 @@ object IO2a {
     def flatMap[B](f: A => IO[B]): IO[B] =
       FlatMap(this, f) // we do not interpret the `flatMap` here, just return it as a value
     def map[B](f: A => B): IO[B] =
-      flatMap(f andThen (Return(_)))
+      flatMap(f andThen (Return(_))) // same as flatMap(a => Return(f(a))), std map in terms of flatMap
   }
+
   case class Return[A](a: A) extends IO[A]
   case class Suspend[A](resume: () => A) extends IO[A]
   case class FlatMap[A,B](sub: IO[A], k: A => IO[B]) extends IO[B]
@@ -197,9 +192,9 @@ object IO2a {
     case Return(a) => a
     case Suspend(r) => r()
     case FlatMap(x, f) => x match {
-      case Return(a) => run(f(a))
-      case Suspend(r) => run(f(r()))
-      case FlatMap(y, g) => run(y flatMap (a => g(a) flatMap f))
+      case Return(a) => println(s"Return"); run(f(a))
+      case Suspend(r) => println("Suspend"); run(f(r()))
+      case FlatMap(y, g) => println("Flatmap"); run(y flatMap (a => g(a) flatMap f))
     }
   }
 }
@@ -269,7 +264,8 @@ object IO2c {
   }
 
   // return either a `Suspend`, a `Return`, or a right-associated `FlatMap`
-  @annotation.tailrec def step[A](async: Async[A]): Async[A] = async match {
+  @annotation.tailrec
+  def step[A](async: Async[A]): Async[A] = async match {
     case FlatMap(FlatMap(x, f), g) => step(x flatMap (a => f(a) flatMap g))
     case FlatMap(Return(x), f) => step(f(x))
     case _ => async
@@ -307,20 +303,64 @@ object IO3 {
   case class FlatMap[F[_],A,B](s: Free[F, A],
                                f: A => Free[F, B]) extends Free[F, B]
 
-  // Exercise 1: Implement the free monad
-  def freeMonad[F[_]]: Monad[({type f[a] = Free[F,a]})#f] = ???
+  /**
+    * Exercise 1: Implement the free monad
+    */
+  def freeMonad[F[_]]: Monad[({type f[a] = Free[F,a]})#f] = new Monad[({type f[a] = Free[F, a]})#f] {
+    override def flatMap[A, B](fa: Free[F, A])(f: (A) => Free[F, B]): Free[F, B] = FlatMap(fa, f)
+
+    override def unit[A](a: => A): Free[F, A] = Return(a)
+  }
 
   // Exercise 2: Implement a specialized `Function0` interpreter.
-  // @annotation.tailrec
-  def runTrampoline[A](a: Free[Function0,A]): A = ???
+  @annotation.tailrec
+  def runTrampoline[A](fa: Free[Function0, A]): A = {
+    fa match {
+      case Return(e) => e
+      case Suspend(s) => s()
+      case FlatMap(x, f) => x match {
+        case Return(b) => runTrampoline(f(b))
+        case Suspend(r) => runTrampoline(f(r()))
+        case FlatMap(y, g) => runTrampoline(y flatMap (a => g(a) flatMap f))
+      }
+    }
+  }
 
   // Exercise 3: Implement a `Free` interpreter which works for any `Monad`
-  def run[F[_],A](a: Free[F,A])(implicit F: Monad[F]): F[A] = ???
+  def run[F[_],A](fa: Free[F,A])(implicit F: Monad[F]): F[A] = step(fa) match {
+    case Return(r) => F.unit(r)
+    case Suspend(fb) => fb
+    case FlatMap(x, f) => x match {
+      case Suspend(r) => F.flatMap(r)(a => run(f(a)))
+      case _ => sys.error("Impossible, since `step` eliminates these cases")
+    }
+  }
 
   // return either a `Suspend`, a `Return`, or a right-associated `FlatMap`
   // @annotation.tailrec
-  def step[F[_],A](a: Free[F,A]): Free[F,A] = ???
+  def step[F[_],A](a: Free[F, A]): Free[F, A] = a match {
+    case FlatMap(FlatMap(x, f), g) => step(x flatMap(r => f(r) flatMap g))
+    case FlatMap(Return(x), f) => step(f(x))
+    case _ => a
+  }
 
+  /*
+   @annotation.tailrec
+  def step[A](async: Async[A]): Async[A] = async match {
+    case FlatMap(FlatMap(x, f), g) => step(x flatMap (a => f(a) flatMap g))
+    case FlatMap(Return(x), f) => step(f(x))
+    case _ => async
+  }
+
+  def run[A](async: Async[A]): Par[A] = step(async) match {
+    case Return(a) => Par.unit(a)
+    case Suspend(r) => r
+    case FlatMap(x, f) => x match {
+      case Suspend(r) => Par.flatMap(r)(a => run(f(a)))
+      case _ => sys.error("Impossible, since `step` eliminates these cases")
+    }
+  }
+   */
   /*
   The type constructor `F` lets us control the set of external requests our
   program is allowed to make. For instance, here is a type that allows for
