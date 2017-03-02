@@ -312,7 +312,9 @@ object IO3 {
     override def unit[A](a: => A): Free[F, A] = Return(a)
   }
 
-  // Exercise 2: Implement a specialized `Function0` interpreter.
+  /**
+    * Exercise 2: Implement a specialized `Function0` interpreter.
+    */
   @annotation.tailrec
   def runTrampoline[A](fa: Free[Function0, A]): A = {
     fa match {
@@ -326,7 +328,9 @@ object IO3 {
     }
   }
 
-  // Exercise 3: Implement a `Free` interpreter which works for any `Monad`
+  /**
+    * Exercise 3: Implement a `Free` interpreter which works for any `Monad`
+    */
   def run[F[_],A](fa: Free[F,A])(implicit F: Monad[F]): F[A] = step(fa) match {
     case Return(r) => F.unit(r)
     case Suspend(fb) => fb
@@ -337,30 +341,13 @@ object IO3 {
   }
 
   // return either a `Suspend`, a `Return`, or a right-associated `FlatMap`
-  // @annotation.tailrec
+   @annotation.tailrec
   def step[F[_],A](a: Free[F, A]): Free[F, A] = a match {
     case FlatMap(FlatMap(x, f), g) => step(x flatMap(r => f(r) flatMap g))
     case FlatMap(Return(x), f) => step(f(x))
     case _ => a
   }
 
-  /*
-   @annotation.tailrec
-  def step[A](async: Async[A]): Async[A] = async match {
-    case FlatMap(FlatMap(x, f), g) => step(x flatMap (a => f(a) flatMap g))
-    case FlatMap(Return(x), f) => step(f(x))
-    case _ => async
-  }
-
-  def run[A](async: Async[A]): Par[A] = step(async) match {
-    case Return(a) => Par.unit(a)
-    case Suspend(r) => r
-    case FlatMap(x, f) => x match {
-      case Suspend(r) => Par.flatMap(r)(a => run(f(a)))
-      case _ => sys.error("Impossible, since `step` eliminates these cases")
-    }
-  }
-   */
   /*
   The type constructor `F` lets us control the set of external requests our
   program is allowed to make. For instance, here is a type that allows for
@@ -369,6 +356,10 @@ object IO3 {
 
   import fpinscala.parallelism.Nonblocking.Par
 
+  /**
+    * We define a type that abstracts the kind of operations we want to model as effects of our free monad
+    * We define also 2 utility methods to help the interpreter to run it and obtain an A (or equivalently a Function0[A] or a Par[A])
+    */
   sealed trait Console[A] {
     def toPar: Par[A]
     def toThunk: () => A
@@ -386,12 +377,17 @@ object IO3 {
       try Some(readLine())
       catch { case e: Exception => None }
 
+    //must return a State[Buffers, Option[String]]
+    //read the input buffer: if empty return None, otherwise pop the head and return it, and update the input buffers to hold just the tail
     def toState = ConsoleState { bufs =>
       bufs.in match {
         case List() => (None, bufs)
         case h :: t => (Some(h), bufs.copy(in = t))
       }
     }
+
+    //must return a Reader[String, Option[String]]
+    //put whatever is told to put when reading, in the run. Remember ConsoleReader.run("Context") = Some("Context")
     def toReader = ConsoleReader { in => Some(in) }
   }
 
@@ -399,7 +395,7 @@ object IO3 {
     def toPar = Par.lazyUnit(println(line))
     def toThunk = () => println(line)
     def toReader = ConsoleReader { s => () } // noop
-    def toState = ConsoleState { bufs => ((), bufs.copy(out = bufs.out :+ line)) } // append to the output
+    def toState = ConsoleState { bufs => ((), bufs.copy(out = bufs.out :+ line)) } // append to the output to the output buffer
   }
 
   object Console {
@@ -427,16 +423,20 @@ object IO3 {
   type ~>[F[_], G[_]] = Translate[F,G] // gives us infix syntax `F ~> G` for `Translate[F,G]`
 
   implicit val function0Monad = new Monad[Function0] {
-    def unit[A](a: => A) = () => a
-    def flatMap[A,B](a: Function0[A])(f: A => Function0[B]) =
+    def unit[A](a: => A): Function0[A] = () => a
+    def flatMap[A,B](a: Function0[A])(f: A => Function0[B]): Function0[B] =
       () => f(a())()
   }
 
   implicit val parMonad = new Monad[Par] {
-    def unit[A](a: => A) = Par.unit(a)
-    def flatMap[A,B](a: Par[A])(f: A => Par[B]) = Par.fork { Par.flatMap(a)(f) }
+    def unit[A](a: => A): Par[A] = Par.unit(a)
+    def flatMap[A,B](a: Par[A])(f: A => Par[B]): Par[B] = Par.fork { Par.flatMap(a)(f) }
   }
 
+  /**
+    * Given a free monad `Free[F, A]` and a translator from `F`to a monad `G`, we can
+    * derive an interpreter for free that gives us back a `G[A]`
+    */
   def runFree[F[_],G[_],A](free: Free[F,A])(t: F ~> G)(
                            implicit G: Monad[G]): G[A] =
     step(free) match {
@@ -446,8 +446,12 @@ object IO3 {
       case _ => sys.error("Impossible, since `step` eliminates these cases")
     }
 
+  /**
+    * In real life we might want to pattern match on the ADT and decide what kind of effect it becomes
+    */
   val consoleToFunction0 =
     new (Console ~> Function0) { def apply[A](a: Console[A]) = a.toThunk }
+
   val consoleToPar =
     new (Console ~> Par) { def apply[A](a: Console[A]) = a.toPar }
 
@@ -473,13 +477,14 @@ object IO3 {
   /*
   There is nothing about `Free[Console,A]` that requires we interpret
   `Console` using side effects. Here are two pure ways of interpreting
-  a `Free[Console,A]`.
+  a `Free[Console, A]`.
   */
   import Console._
 
   case class Buffers(in: List[String], out: Vector[String])
 
-  // A specialized state monad
+  // A specialized state monad, equivalent to State[Buffers, A]
+  // This allows to keep track of the IO by means of the state, without doing any real IO. It is sufficient to prepare the buffers input and output
   case class ConsoleState[A](run: Buffers => (A, Buffers)) {
     def map[B](f: A => B): ConsoleState[B] =
       ConsoleState { s =>

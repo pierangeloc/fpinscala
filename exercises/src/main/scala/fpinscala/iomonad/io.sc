@@ -1,5 +1,5 @@
 import fpinscala.iomonad.IO1._
-import fpinscala.iomonad.Monad
+import fpinscala.iomonad.{IO3, Monad}
 
 //this overflows
 //IO.forever(PrintLine("Ciao!")).run
@@ -39,3 +39,25 @@ val deepTailRec = List.fill(4)(idTailRec).foldLeft(idTailRec) {
   (tr1, tr2) => x => Return(()).flatMap(_  => tr1(x).flatMap(tr2))
 }
 TailRec.run(deepTailRec(666))
+
+/**  FREE MONAD **/
+import fpinscala.iomonad.IO3._
+val printBuongiorno = IO3.Console.printLn("Buongiorno")
+val printBuonasera = IO3.Console.printLn("Buonasera")
+val printArrivederci = IO3.Console.printLn("Arrivederci")
+
+val printingProgram: Free[Console, Unit] = for {
+  _ <- printBuongiorno
+  _ <- printBuonasera
+  _ <- printArrivederci
+} yield ()
+
+runConsoleFunction0(printingProgram)()
+
+val echoingProgram = for {
+  input <- IO3.Console.readLn
+  output <- IO3.Console.printLn("You gave me " + input)
+} yield "END"
+
+val ioBuffers = Buffers(List("First Input", "Second Input"), Vector())
+runConsoleState(echoingProgram).run(ioBuffers)
