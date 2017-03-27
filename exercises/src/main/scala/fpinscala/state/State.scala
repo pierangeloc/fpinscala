@@ -183,14 +183,18 @@ object State {
     }
   }
 
-  type Rand[A] = State[RNG, A]
-
   // return state of machine and number of candies/coins
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = State( (machine: Machine) => {
+  def simulateMachineNoState(inputs: List[Input]): State[Machine, (Int, Int)] = State( (machine: Machine) => {
       val finalMachine = inputs.foldLeft(machine)((m, input) => mutate(m, input))
       ((finalMachine.candies, finalMachine.coins), finalMachine)
     }
   )
+  // return state of machine and number of candies/coins
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = for {
+    _ <- sequence(inputs.map(i => modify((s: Machine) => mutate(s, i))))
+    s <- get
+  } yield (s.coins, s.candies)
+
 
   //Ex 6.10 (ii)
   def unit[S, A](a: A): State[S, A] = State((s: S) => (a, s))
@@ -202,6 +206,11 @@ object State {
 
   //to get the state, a transition from the state s to (s, s) will expose the internal state
   def get[S]: State[S, S] = State(s => (s, s))
+
+  def modify[S](f: S => S): State[S, Unit] = for {
+    s <- get
+    _ <- set(f(s))
+  } yield ()
 
 }
 

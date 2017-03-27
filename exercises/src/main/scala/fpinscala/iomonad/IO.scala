@@ -329,6 +329,25 @@ object IO3 {
   }
 
   /**
+    * With a signature more consistent with the whole idea of returning a F[A] from the runner
+    * @param fa
+    * @tparam A
+    * @return
+    */
+  @annotation.tailrec
+  def runTrampoline2[A](fa: Free[Function0, A]): Function0[A] = {
+    fa match {
+      case Return(e) => () => e
+      case Suspend(s) => s
+      case FlatMap(x, f) => x match {
+        case Return(b) => runTrampoline2(f(b))
+        case Suspend(r) => runTrampoline2(f(r()))
+        case FlatMap(y, g) => runTrampoline2(y flatMap (a => g(a) flatMap f))
+      }
+    }
+  }
+
+  /**
     * Exercise 3: Implement a `Free` interpreter which works for any `Monad`
     */
   def run[F[_],A](fa: Free[F,A])(implicit F: Monad[F]): F[A] = step(fa) match {
