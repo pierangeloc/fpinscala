@@ -166,8 +166,8 @@ object SimpleStreamTransducers {
       def go(p: Process[I,O]): Process[I,O] = p match {
         case Halt() => go(this)
         case Await(recv) => Await {
-          case None => recv(None)
-          case i => go(recv(i))
+          case None => recv(None) //when source terminates, just produce the output
+          case i => go(recv(i)) // otherwise, reapply to the continuation of the Await
         }
         case Emit(h, t) => Emit(h, go(t))
       }
@@ -212,15 +212,30 @@ object SimpleStreamTransducers {
 
   object Process {
 
+    /**
+      * We can see all these as commands for an interpreter (now called driver, as it is driven by the input stream) that transduces
+      * Stream[I] into Stream[O]
+      */
+
+    /**
+      * Emit the `head` element, then transition to the `tail` state and process again
+      */
     case class Emit[I,O](
         head: O,
         tail: Process[I,O] = Halt[I,O]())
       extends Process[I,O]
 
+    /**
+      * Wait for the element emitter by the input stream (if any, otherwise None), to produce the next available element(s). To have
+      * this flexibility `recv` outputs a `Process` rather than just an `Emit`
+      */
     case class Await[I,O](
         recv: Option[I] => Process[I,O])
       extends Process[I,O]
 
+    /**
+      * This says to stop emitting
+      */
     case class Halt[I,O]() extends Process[I,O]
 
     def emit[I,O](head: O,
@@ -289,13 +304,27 @@ object SimpleStreamTransducers {
     /*
      * Exercise 1: Implement `take`, `drop`, `takeWhile`, and `dropWhile`.
      */
-    def take[I](n: Int): Process[I,I] = ???
+    def take[I](n: Int): Process[I,I] =
+      //take(2) = Process.await[Int, Int](x => Process.Emit(x, Process.await[Int, Int](y => Process.Emit(y, Process.Halt()))))
+        if (n <= 0) Halt()
+        else await(x => Emit(x, take(n - 1)))
 
-    def drop[I](n: Int): Process[I,I] = ???
+    def drop[I](n: Int): Process[I,I] =
+        if (n <= 0) id
+        else await(_ => drop(n - 1))
 
-    def takeWhile[I](f: I => Boolean): Process[I,I] = ???
 
-    def dropWhile[I](f: I => Boolean): Process[I,I] = ???
+    def takeWhile[I](f: I => Boolean): Process[I,I] =
+        await { x =>
+          if (f(x)) Emit(x, takeWhile(f))
+          else Halt()
+        }
+
+    def dropWhile[I](f: I => Boolean): Process[I,I] =
+        await { x =>
+          if (f(x)) await(_ => dropWhile(f))
+          else Emit(x, id)
+        }
 
     /* The identity `Process`, just repeatedly echos its input. */
     def id[I]: Process[I,I] = lift(identity)
@@ -1010,6 +1039,18 @@ object GeneralizedStreamTransducers {
   }
 }
 
+object SimpleTransducerTest extends App {
+  import SimpleStreamTransducers._
+//  println(Process.await[Int, Int](x => Process.Emit(x, Process.await[Int, Int](y => Process.Emit(y, Process.Halt())))).apply(Stream.from(5)).toList)
+  val original = Stream.from(1).take(10)
+  println(s"original: ${original.toList}")
+  println("take 5: " + Process.take(5)(original).toList)
+  println("drop 5: " + Process.drop(5)(original).toList)
+
+  println("takeWhile < 3: " + Process.takeWhile((x: Int)=> x < 3)(original).toList)
+  println("dropWhile < 3: " + Process.dropWhile((x: Int)=> x < 3)(original).toList)
+}
+
 object ProcessTest extends App {
   import GeneralizedStreamTransducers._
   import fpinscala.iomonad.IO
@@ -1025,3 +1066,5 @@ object ProcessTest extends App {
   println { Process.runLog(converter) }
   // println { Process.collect(Process.convertAll) }
 }
+
+

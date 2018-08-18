@@ -190,10 +190,13 @@ object State {
     }
   )
   // return state of machine and number of candies/coins
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = for {
-    _ <- sequence(inputs.map(i => modify((s: Machine) => mutate(s, i))))
-    s <- get
-  } yield (s.coins, s.candies)
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = {
+    val t = sequence(inputs.map(i => modify((s: Machine) => mutate(s, i))))
+    for {
+      _ <- sequence(inputs.map(i => modify((s: Machine) => mutate(s, i))))
+      s <- get
+    } yield (s.coins, s.candies)
+  }
 
 
   //Ex 6.10 (ii)
