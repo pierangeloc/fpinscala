@@ -330,9 +330,14 @@ object SimpleStreamTransducers {
     def id[I]: Process[I,I] = lift(identity)
 
     /*
-     * Exercise 2: Implement `count`.
+     * Exercise 2: Implement `count`. Given Stream("a", "b", "c"), output Stream(0, 1, 2)
      */
-    def count[I]: Process[I,Int] = ???
+    def count[I]: Process[I,Int] = {
+      def go(headNr: Int): Process[I, Int] = await { x =>
+        Emit(headNr, go(headNr + 1))
+      }
+      go(0)
+    }
 
     /* For comparison, here is an explicit recursive implementation. */
     def count2[I]: Process[I,Int] = {
@@ -344,8 +349,17 @@ object SimpleStreamTransducers {
     /*
      * Exercise 3: Implement `mean`.
      */
-    def mean: Process[Double,Double] = ???
+    def mean: Process[Double,Double] = {
+      def go(acc: Double, nrSoFar: Int): Process[Double, Double] = await { x =>
+        val newAcc = acc + x
+        val newNr = nrSoFar + 1
+        Emit(newAcc / newNr, go(newAcc, newNr))
+      }
 
+      go(0, 0)
+    }
+
+    //N.B. loop embeds an IndexedState in f
     def loop[S,I,O](z: S)(f: (I,S) => (O,S)): Process[I,O] =
       await((i: I) => f(i,z) match {
         case (o,s2) => emit(o, loop(s2)(f))
@@ -353,9 +367,9 @@ object SimpleStreamTransducers {
 
     /* Exercise 4: Implement `sum` and `count` in terms of `loop` */
 
-    def sum2: Process[Double,Double] = ???
+    def sum2: Process[Double,Double] = loop(0.0)((i, s) => (i + s, i + s))
 
-    def count3[I]: Process[I,Int] = ???
+    def count3[I]: Process[I,Int] = loop(-1)((i, s) => (s + 1, s + 1))
 
     /*
      * Exercise 7: Can you think of a generic combinator that would
@@ -1049,6 +1063,13 @@ object SimpleTransducerTest extends App {
 
   println("takeWhile < 3: " + Process.takeWhile((x: Int)=> x < 3)(original).toList)
   println("dropWhile < 3: " + Process.dropWhile((x: Int)=> x < 3)(original).toList)
+
+  println("""count(Stream("a", "b", "c"))""" + Process.count(Stream("a", "b", "c")).toList)
+  println("mean(Stream(1,2,3,4,5): " + Process.mean(Stream(1,2,3,4,5)).toList)
+  println("""sum2(Stream(0.0, 1.0, 2.0))""" + Process.sum2(Stream(0.0, 1.0, 2.0)).toList)
+  println("""count3(Stream("a", "b", "c"))""" + Process.count3(Stream("a", "b", "c")).toList)
+
+
 }
 
 object ProcessTest extends App {
